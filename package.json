@@ -1,0 +1,13 @@
+{
+  "name": "kyoteibiyori-daily-pick-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node daily_pick_kyoteibiyori.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "playwright": "^1.52.0"
+  }
+}
