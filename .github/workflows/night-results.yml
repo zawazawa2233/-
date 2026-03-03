@@ -1,8 +1,8 @@
-name: Daily Kyoteibiyori Pick
+name: Night Kyoteibiyori Results
 
 on:
   schedule:
-    - cron: "0 22 * * *"
+    - cron: "0 14 * * *"
   workflow_dispatch:
     inputs:
       hiduke:
@@ -11,7 +11,7 @@ on:
         type: string
 
 jobs:
-  run-daily-pick:
+  run-night-results:
     runs-on: ubuntu-latest
     env:
       PICK_STATE_DIR: artifacts
@@ -38,17 +38,16 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run scraper
+      - name: Download picked race state
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: picked-races-${{ env.HIDUKE }}
+          path: ${{ env.PICK_STATE_DIR }}
+
+      - name: Run result notifier
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           HIDUKE: ${{ env.HIDUKE }}
           PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
-        run: npm start
-
-      - name: Upload picked race state
-        uses: actions/upload-artifact@v4
-        with:
-          name: picked-races-${{ env.HIDUKE }}
-          path: ${{ env.PICK_STATE_DIR }}/picked-races-${{ env.HIDUKE }}.json
-          if-no-files-found: error
-          retention-days: 2
+        run: npm run start:night

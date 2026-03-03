@@ -1,9 +1,10 @@
 # Kyoteibiyori Daily Pick Bot
 
-`kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報をDOMから取得して、条件一致レースを Discord Webhook に送信するスクリプトです。
+朝は `kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報を DOM から取得して、条件一致レースを Discord Webhook に送信します。
 
-ページは最初に `データ取得中…` と表示されるため、静的HTMLではなくブラウザ描画後のDOMを使います。
-開催がないページで `データはありません` と出る場合は、失敗ではなくスキップとして扱います。
+夜は、朝に実際に送信したレース一覧を JSON として保存しておき、その同じレースだけを対象に `boatrace.jp` の公式結果ページから三連単と確定払戻金を取得して Discord Webhook に送信します。
+
+ページは最初に `データ取得中…` と表示されるため、朝処理は静的 HTML ではなくブラウザ描画後の DOM を使います。開催がないページで `データはありません` と出る場合は、失敗ではなくスキップとして扱います。
 
 ## 判定ルール
 
@@ -18,7 +19,9 @@
 - `捲り`: 1号艇 `捲られ >= 10` かつ 2〜6号艇のどれか `捲り >= 10` かつ `捲り > 1号艇捲られ`
 - `捲り差し`: 1号艇 `捲られ差し >= 10` かつ 2〜6号艇のどれか `捲り差し >= 10` かつ `捲り差し > 1号艇捲られ差し`
 
-上記のいずれか1つでも成立したレースを Discord に送信します。Discord Webhook には下書き機能がないため、`[DRAFT]` タイトル付きの `embed` として送信します。
+上記のいずれか1つでも成立したレースを Discord に送信します。Discord Webhook には下書き機能がないため、朝通知は `[DRAFT]` タイトル付きの `embed` として送信します。
+
+朝の Discord 送信が成功した場合は、対象レースを `picked-races-YYYYMMDD.json` として保存します。このファイルは GitHub Actions で artifact として引き継ぎ、夜の結果通知に使います。
 
 ## 環境変数
 
@@ -29,6 +32,7 @@
 - `CONCURRENCY` 任意。並列数。デフォルト `2`。
 - `THROTTLE_MS` 任意。アクセス間隔ミリ秒。デフォルト `250`。
 - `DRY_RUN` 任意。`1` のとき Discord に送らず、送信予定の payload を標準出力に出します。
+- `PICK_STATE_DIR` 任意。朝に保存する `picked-races-YYYYMMDD.json` と、夜に読む同ファイルの配置ディレクトリ。省略時は `artifacts`。
 
 ## Discord Webhook の作成
 
@@ -77,11 +81,28 @@ export RACE_NO_LIST="1"
 npm start
 ```
 
+夜の結果通知だけをローカル実行する場合は、朝に保存された JSON が必要です。
+
+```bash
+export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+export HIDUKE="20260302"
+npm run start:night
+```
+
+`DRY_RUN=1` なら、夜処理も Discord には送らず payload のみ出力します。
+
 ## GitHub Actions
 
-ワークフローは次のタイミングで実行できます。
+朝ワークフロー [`daily.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/daily.yml) は次のタイミングで実行できます。
 
 - 毎日 `07:00 JST` の定期実行
 - `workflow_dispatch` による手動実行
 
-実行時には Playwright Chromium をインストールしたあとで `npm start` を実行します。
+実行時には Playwright Chromium をインストールしたあとで `npm start` を実行し、`picked-races-YYYYMMDD.json` を artifact として 2 日保持します。
+
+夜ワークフロー [`night-results.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/night-results.yml) は次のタイミングで実行できます。
+
+- 毎日 `23:00 JST` の定期実行
+- `workflow_dispatch` による手動実行
+
+夜ワークフローは朝の artifact を取得したあとで `npm run start:night` を実行します。artifact が見つからない場合はエラー終了せず、「朝の対象データが見つからないため結果通知をスキップしました」と Discord に通知します。

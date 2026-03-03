@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node daily_pick_kyoteibiyori.js"
+    "start": "node daily_pick_kyoteibiyori.js",
+    "start:night": "node night_result_notify.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2",
