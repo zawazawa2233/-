@@ -63,7 +63,7 @@ jobs:
             );
 
             const match = artifacts
-              .filter((artifact) => artifact.name === targetName && !artifact.expired)
+              .filter((artifact) => artifact && artifact.name === targetName && !artifact.expired)
               .sort((left, right) => new Date(right.created_at) - new Date(left.created_at))[0];
 
             if (!match) {
