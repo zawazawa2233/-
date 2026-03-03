@@ -9,6 +9,10 @@ on:
         description: "YYYYMMDD (default: today in JST)"
         required: false
         type: string
+      source_run_id:
+        description: "Daily workflow run ID to download picked-races artifact from"
+        required: false
+        type: string
 
 jobs:
   run-night-results:
@@ -32,6 +36,12 @@ jobs:
             echo "HIDUKE=$(TZ=Asia/Tokyo date +%Y%m%d)" >> "$GITHUB_ENV"
           fi
 
+      - name: Resolve source run ID
+        run: |
+          if [ -n "${{ github.event.inputs.source_run_id }}" ]; then
+            echo "SOURCE_RUN_ID=${{ github.event.inputs.source_run_id }}" >> "$GITHUB_ENV"
+          fi
+
       - name: Install dependencies
         run: npm install
 
@@ -39,6 +49,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Resolve picked race state artifact
+        if: env.SOURCE_RUN_ID == ''
         uses: actions/github-script@v7
         id: resolve-artifact
         with:
@@ -92,7 +103,17 @@ jobs:
           PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
 
       - name: Download picked race state
-        if: steps.resolve-artifact.outputs.found == 'true'
+        if: env.SOURCE_RUN_ID != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: picked-races-${{ env.HIDUKE }}
+          path: ${{ env.PICK_STATE_DIR }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Extract picked race state zip
+        if: env.SOURCE_RUN_ID == '' && steps.resolve-artifact.outputs.found == 'true'
         run: unzip -o "${{ steps.resolve-artifact.outputs.zip_path }}" -d "${{ env.PICK_STATE_DIR }}"
 
       - name: Run result notifier
