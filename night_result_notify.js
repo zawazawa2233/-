@@ -2,7 +2,6 @@ import { fetchBoatraceRaceResult } from "./lib/boatrace-results.js";
 import { getJstDateString } from "./lib/date.js";
 import { buildChunkedDiscordPayloads, deliverDiscordPayloads } from "./lib/discord.js";
 import { readPickedRaceState } from "./lib/pick-state.js";
-import { createBrowserContext, launchBrowser } from "./lib/playwright.js";
 
 function parseEnvBoolean(value) {
   if (!value) {
@@ -89,44 +88,36 @@ async function sendSummary(config, summaryLines, blocks = []) {
 }
 
 async function collectResults(state) {
-  const browser = await launchBrowser();
-  const context = await createBrowserContext(browser);
-
-  try {
-    const results = [];
-    for (const race of state.races) {
-      try {
-        const result = await fetchBoatraceRaceResult(context, {
-          hiduke: state.hiduke,
-          placeNo: race.placeNo,
-          raceNo: race.raceNo
-        });
-        results.push({ race, result });
-        console.log(`[race-result] ${race.placeNo}場 ${race.raceNo}R status=${result.status}`);
-      } catch (error) {
-        const fallback = {
-          hiduke: state.hiduke,
-          placeNo: race.placeNo,
-          raceNo: race.raceNo,
-          status: "missing",
-          trifecta: {
-            combination: null,
-            payoutYen: null
-          },
-          finishOrder: null,
-          resultUrl: `https://www.boatrace.jp/owpc/pc/race/raceresult?rno=${race.raceNo}&jcd=${String(race.placeNo).padStart(2, "0")}&hd=${state.hiduke}`,
-          note: error.message
-        };
-        results.push({ race, result: fallback });
-        console.error(`[race-result-failed] ${race.placeNo}場 ${race.raceNo}R :: ${error.message}`);
-      }
+  const results = [];
+  for (const race of state.races) {
+    try {
+      const result = await fetchBoatraceRaceResult(null, {
+        hiduke: state.hiduke,
+        placeNo: race.placeNo,
+        raceNo: race.raceNo
+      });
+      results.push({ race, result });
+      console.log(`[race-result] ${race.placeNo}場 ${race.raceNo}R status=${result.status}`);
+    } catch (error) {
+      const fallback = {
+        hiduke: state.hiduke,
+        placeNo: race.placeNo,
+        raceNo: race.raceNo,
+        status: "missing",
+        trifecta: {
+          combination: null,
+          payoutYen: null
+        },
+        finishOrder: null,
+        resultUrl: `https://www.boatrace.jp/owpc/pc/race/raceresult?rno=${race.raceNo}&jcd=${String(race.placeNo).padStart(2, "0")}&hd=${state.hiduke}`,
+        note: error.message
+      };
+      results.push({ race, result: fallback });
+      console.error(`[race-result-failed] ${race.placeNo}場 ${race.raceNo}R :: ${error.message}`);
     }
-
-    return results;
-  } finally {
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
   }
+
+  return results;
 }
 
 async function main() {
@@ -173,9 +164,6 @@ async function main() {
 
   console.log(`[done] hiduke=${state.hiduke} confirmed=${counts.confirmed} not_final=${counts.notFinal} cancelled=${counts.cancelled} missing=${counts.missing} discordMessages=${messages}`);
 
-  if (results.length > 0 && counts.missing === results.length) {
-    process.exitCode = 1;
-  }
 }
 
 main().catch((error) => {
