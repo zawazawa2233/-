@@ -38,12 +38,52 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Resolve source run for picked race state
+        uses: actions/github-script@v7
+        id: resolve-artifact-run
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const targetName = `picked-races-${process.env.HIDUKE}`;
+
+            core.info(`Searching artifact: ${targetName}`);
+
+            const artifacts = await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              {
+                owner,
+                repo,
+                per_page: 100
+              },
+              (response) => response.data.artifacts
+            );
+
+            const match = artifacts
+              .filter((artifact) => artifact.name === targetName && !artifact.expired)
+              .sort((left, right) => new Date(right.created_at) - new Date(left.created_at))[0];
+
+            if (!match) {
+              core.warning(`Artifact not found: ${targetName}`);
+              core.setOutput("found", "false");
+              return;
+            }
+
+            core.setOutput("found", "true");
+            core.setOutput("run_id", String(match.workflow_run.id));
+            core.info(`Resolved workflow run: ${match.workflow_run.id}`);
+        env:
+          HIDUKE: ${{ env.HIDUKE }}
+
       - name: Download picked race state
-        continue-on-error: true
+        if: steps.resolve-artifact-run.outputs.found == 'true'
         uses: actions/download-artifact@v4
         with:
           name: picked-races-${{ env.HIDUKE }}
           path: ${{ env.PICK_STATE_DIR }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve-artifact-run.outputs.run_id }}
 
       - name: Run result notifier
         env:
