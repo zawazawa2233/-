@@ -1,4 +1,4 @@
-import { fetchBoatraceRaceResult } from "./lib/boatrace-results.js";
+import { buildRaceResultFromPayoutMap, fetchBoatraceDailyPayouts } from "./lib/boatrace-results.js";
 import { getJstDateString } from "./lib/date.js";
 import { buildChunkedDiscordPayloads, deliverDiscordPayloads } from "./lib/discord.js";
 import { readPickedRaceState } from "./lib/pick-state.js";
@@ -88,13 +88,16 @@ async function sendSummary(config, summaryLines, blocks = []) {
 }
 
 async function collectResults(state) {
+  const payoutMap = await fetchBoatraceDailyPayouts(state.hiduke);
   const results = [];
+
   for (const race of state.races) {
     try {
-      const result = await fetchBoatraceRaceResult(null, {
+      const result = buildRaceResultFromPayoutMap({
         hiduke: state.hiduke,
         placeNo: race.placeNo,
-        raceNo: race.raceNo
+        raceNo: race.raceNo,
+        payoutMap
       });
       results.push({ race, result });
       console.log(`[race-result] ${race.placeNo}場 ${race.raceNo}R status=${result.status}`);
