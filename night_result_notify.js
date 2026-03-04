@@ -1,4 +1,9 @@
-import { buildRaceResultFromPayoutMap, fetchBoatraceDailyPayouts } from "./lib/boatrace-results.js";
+import {
+  buildBoatraceResultUrl,
+  buildRaceResultFromPayoutMap,
+  fetchBoatraceDailyPayouts,
+  fetchBoatraceRaceResult
+} from "./lib/boatrace-results.js";
 import { getJstDateString } from "./lib/date.js";
 import { buildChunkedDiscordPayloads, deliverDiscordPayloads } from "./lib/discord.js";
 import { readPickedRaceState } from "./lib/pick-state.js";
@@ -102,7 +107,7 @@ async function collectResults(state) {
 
   for (const race of state.races) {
     try {
-      const result = payoutLoadError
+      let result = payoutLoadError
         ? {
             hiduke: state.hiduke,
             placeNo: race.placeNo,
@@ -113,7 +118,11 @@ async function collectResults(state) {
               payoutYen: null
             },
             finishOrder: null,
-            resultUrl: `https://www.boatrace.jp/owpc/pc/race/raceresult?rno=${race.raceNo}&jcd=${String(race.placeNo).padStart(2, "0")}&hd=${state.hiduke}`,
+            resultUrl: buildBoatraceResultUrl({
+              hiduke: state.hiduke,
+              placeNo: race.placeNo,
+              raceNo: race.raceNo
+            }),
             note: `Failed to load daily pay table: ${payoutLoadError.message}`
           }
         : buildRaceResultFromPayoutMap({
@@ -122,6 +131,18 @@ async function collectResults(state) {
             raceNo: race.raceNo,
             payoutMap
           });
+
+      if (result.status === "missing") {
+        const raceResult = await fetchBoatraceRaceResult({
+          hiduke: state.hiduke,
+          placeNo: race.placeNo,
+          raceNo: race.raceNo
+        });
+        if (raceResult.status !== "missing" || raceResult.trifecta.combination || raceResult.trifecta.payoutYen !== null) {
+          result = raceResult;
+        }
+      }
+
       results.push({ race, result });
       console.log(`[race-result] ${race.placeNo}場 ${race.raceNo}R status=${result.status}`);
     } catch (error) {
@@ -135,7 +156,11 @@ async function collectResults(state) {
           payoutYen: null
         },
         finishOrder: null,
-        resultUrl: `https://www.boatrace.jp/owpc/pc/race/raceresult?rno=${race.raceNo}&jcd=${String(race.placeNo).padStart(2, "0")}&hd=${state.hiduke}`,
+        resultUrl: buildBoatraceResultUrl({
+          hiduke: state.hiduke,
+          placeNo: race.placeNo,
+          raceNo: race.raceNo
+        }),
         note: error.message
       };
       results.push({ race, result: fallback });
