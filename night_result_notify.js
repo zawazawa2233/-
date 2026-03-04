@@ -88,17 +88,40 @@ async function sendSummary(config, summaryLines, blocks = []) {
 }
 
 async function collectResults(state) {
-  const payoutMap = await fetchBoatraceDailyPayouts(state.hiduke);
+  let payoutMap = new Map();
+  let payoutLoadError = null;
+
+  try {
+    payoutMap = await fetchBoatraceDailyPayouts(state.hiduke);
+  } catch (error) {
+    payoutLoadError = error;
+    console.error(`[pay-table-failed] ${error.message}`);
+  }
+
   const results = [];
 
   for (const race of state.races) {
     try {
-      const result = buildRaceResultFromPayoutMap({
-        hiduke: state.hiduke,
-        placeNo: race.placeNo,
-        raceNo: race.raceNo,
-        payoutMap
-      });
+      const result = payoutLoadError
+        ? {
+            hiduke: state.hiduke,
+            placeNo: race.placeNo,
+            raceNo: race.raceNo,
+            status: "missing",
+            trifecta: {
+              combination: null,
+              payoutYen: null
+            },
+            finishOrder: null,
+            resultUrl: `https://www.boatrace.jp/owpc/pc/race/raceresult?rno=${race.raceNo}&jcd=${String(race.placeNo).padStart(2, "0")}&hd=${state.hiduke}`,
+            note: `Failed to load daily pay table: ${payoutLoadError.message}`
+          }
+        : buildRaceResultFromPayoutMap({
+            hiduke: state.hiduke,
+            placeNo: race.placeNo,
+            raceNo: race.raceNo,
+            payoutMap
+          });
       results.push({ race, result });
       console.log(`[race-result] ${race.placeNo}場 ${race.raceNo}R status=${result.status}`);
     } catch (error) {
