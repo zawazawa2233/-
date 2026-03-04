@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PICK_STATE_DIR: artifacts
+      RESULT_DEBUG_DIR: artifacts/night-debug
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -121,4 +122,13 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           HIDUKE: ${{ env.HIDUKE }}
           PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
+          RESULT_DEBUG_DIR: ${{ env.RESULT_DEBUG_DIR }}
         run: npm run start:night
+
+      - name: Upload night debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: night-debug-${{ env.HIDUKE }}
+          path: ${{ env.RESULT_DEBUG_DIR }}
+          if-no-files-found: ignore
