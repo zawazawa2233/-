@@ -40,38 +40,63 @@ function formatPercent(value) {
 }
 
 function formatMatchReason(reason) {
-  return `${reason.type} ${reason.boat}号艇 ${formatPercent(reason.attack)} > 1号艇${reason.defenseLabel} ${formatPercent(reason.defense)}`;
+  return `${reason.type}: ${reason.boat}号艇 ${formatPercent(reason.attack)} > 1号艇${reason.defenseLabel} ${formatPercent(reason.defense)}`;
 }
 
 function formatPayout(value) {
   return value === null ? null : `${value.toLocaleString("ja-JP")}円`;
 }
 
-function formatRaceBlock(race, result) {
-  const lines = [`【${race.placeName} ${race.raceNo}R】`];
-
-  if (result.status === "confirmed") {
-    lines.push(`三連単: ${result.trifecta.combination}`);
-    lines.push(`確定オッズ: ${formatPayout(result.trifecta.payoutYen)}`);
-  } else if (result.status === "not_final") {
-    lines.push("三連単: 未確定");
-    lines.push("確定オッズ: 未確定");
-  } else if (result.status === "cancelled") {
-    lines.push("三連単: 中止");
-    lines.push("確定オッズ: なし");
-  } else {
-    lines.push("三連単: 取得失敗");
-    lines.push("確定オッズ: 取得失敗");
+function formatHiduke(hiduke) {
+  if (!/^\d{8}$/.test(hiduke)) {
+    return hiduke;
   }
 
-  lines.push(`結果URL: ${result.resultUrl}`);
-  lines.push(`朝条件: ${race.matchReasons.map((reason) => formatMatchReason(reason)).join(" / ") || "記録なし"}`);
+  return `${hiduke.slice(0, 4)}-${hiduke.slice(4, 6)}-${hiduke.slice(6, 8)}`;
+}
+
+function buildResultHeadline(race, result) {
+  if (result.status === "confirmed") {
+    return `【${race.placeName} ${race.raceNo}R】 ${result.trifecta.combination} / ${formatPayout(result.trifecta.payoutYen)}`;
+  }
+
+  if (result.status === "not_final") {
+    return `【${race.placeName} ${race.raceNo}R】 未確定`;
+  }
+
+  if (result.status === "cancelled") {
+    return `【${race.placeName} ${race.raceNo}R】 中止`;
+  }
+
+  return `【${race.placeName} ${race.raceNo}R】 取得失敗`;
+}
+
+function formatRaceBlock(race, result) {
+  const lines = [buildResultHeadline(race, result)];
+  const reasons = race.matchReasons.map((reason) => `- ${formatMatchReason(reason)}`);
+
+  if (reasons.length > 0) {
+    lines.push("条件:");
+    lines.push(...reasons);
+  }
+
+  lines.push(`結果: ${result.resultUrl}`);
 
   if (result.note) {
     lines.push(`備考: ${result.note}`);
   }
 
   return lines.join("\n");
+}
+
+function buildTopPayoutLine(results) {
+  const topItems = results
+    .filter((item) => item.result.status === "confirmed" && item.result.trifecta.payoutYen !== null)
+    .sort((left, right) => right.result.trifecta.payoutYen - left.result.trifecta.payoutYen)
+    .slice(0, 3)
+    .map((item) => `${item.race.placeName} ${item.race.raceNo}R ${formatPayout(item.result.trifecta.payoutYen)}`);
+
+  return topItems.length > 0 ? `高配当: ${topItems.join(" / ")}` : null;
 }
 
 async function sendSummary(config, summaryLines, blocks = []) {
@@ -205,13 +230,11 @@ async function main() {
   const blocks = results.map(({ race, result }) => formatRaceBlock(race, result));
 
   const messages = await sendSummary(config, [
-    `対象日: ${state.hiduke}`,
-    `対象レース: ${state.races.length}`,
-    `確定: ${counts.confirmed}`,
-    `未確定: ${counts.notFinal}`,
-    `中止: ${counts.cancelled}`,
-    `取得失敗: ${counts.missing}`
-  ], blocks);
+    `対象日: ${formatHiduke(state.hiduke)}`,
+    `件数: ${state.races.length}レース`,
+    `確定 ${counts.confirmed} / 未確定 ${counts.notFinal} / 中止 ${counts.cancelled} / 失敗 ${counts.missing}`,
+    buildTopPayoutLine(results)
+  ].filter(Boolean), blocks);
 
   console.log(`[done] hiduke=${state.hiduke} confirmed=${counts.confirmed} not_final=${counts.notFinal} cancelled=${counts.cancelled} missing=${counts.missing} discordMessages=${messages}`);
 
