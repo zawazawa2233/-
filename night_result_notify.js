@@ -47,6 +47,19 @@ function formatPayout(value) {
   return value === null ? null : `${value.toLocaleString("ja-JP")}円`;
 }
 
+function getWinningBoat(result) {
+  return Array.isArray(result.finishOrder) && result.finishOrder.length > 0 ? result.finishOrder[0] : null;
+}
+
+function getWinningMatchReasons(race, result) {
+  const winningBoat = getWinningBoat(result);
+  if (!Number.isInteger(winningBoat)) {
+    return [];
+  }
+
+  return race.matchReasons.filter((reason) => reason.boat === winningBoat);
+}
+
 function formatHiduke(hiduke) {
   if (!/^\d{8}$/.test(hiduke)) {
     return hiduke;
@@ -56,24 +69,36 @@ function formatHiduke(hiduke) {
 }
 
 function buildResultHeadline(race, result) {
+  const winningMatches = getWinningMatchReasons(race, result);
+  const prefix = winningMatches.length > 0 ? "◎ " : "";
+
   if (result.status === "confirmed") {
-    return `【${race.placeName} ${race.raceNo}R】 ${result.trifecta.combination} / ${formatPayout(result.trifecta.payoutYen)}`;
+    return `${prefix}【${race.placeName} ${race.raceNo}R】 ${result.trifecta.combination} / ${formatPayout(result.trifecta.payoutYen)}`;
   }
 
   if (result.status === "not_final") {
-    return `【${race.placeName} ${race.raceNo}R】 未確定`;
+    return `${prefix}【${race.placeName} ${race.raceNo}R】 未確定`;
   }
 
   if (result.status === "cancelled") {
-    return `【${race.placeName} ${race.raceNo}R】 中止`;
+    return `${prefix}【${race.placeName} ${race.raceNo}R】 中止`;
   }
 
-  return `【${race.placeName} ${race.raceNo}R】 取得失敗`;
+  return `${prefix}【${race.placeName} ${race.raceNo}R】 取得失敗`;
 }
 
 function formatRaceBlock(race, result) {
   const lines = [buildResultHeadline(race, result)];
-  const reasons = race.matchReasons.map((reason) => `- ${formatMatchReason(reason)}`);
+  const winningBoat = getWinningBoat(result);
+  const winningMatches = getWinningMatchReasons(race, result);
+  const reasons = race.matchReasons.map((reason) => {
+    const marker = reason.boat === winningBoat && winningMatches.length > 0 ? "◎" : "-";
+    return `${marker} ${formatMatchReason(reason)}`;
+  });
+
+  if (winningMatches.length > 0) {
+    lines.push(`先頭一致: ${winningBoat}号艇 (${winningMatches.map((reason) => reason.type).join(" / ")})`);
+  }
 
   if (reasons.length > 0) {
     lines.push("条件:");
@@ -97,6 +122,11 @@ function buildTopPayoutLine(results) {
     .map((item) => `${item.race.placeName} ${item.race.raceNo}R ${formatPayout(item.result.trifecta.payoutYen)}`);
 
   return topItems.length > 0 ? `高配当: ${topItems.join(" / ")}` : null;
+}
+
+function buildWinningMatchSummaryLine(results) {
+  const matchedWins = results.filter(({ race, result }) => getWinningMatchReasons(race, result).length > 0);
+  return matchedWins.length > 0 ? `先頭一致: ${matchedWins.length}レース` : "先頭一致: 0レース";
 }
 
 async function sendSummary(config, summaryLines, blocks = []) {
@@ -233,6 +263,7 @@ async function main() {
     `対象日: ${formatHiduke(state.hiduke)}`,
     `件数: ${state.races.length}レース`,
     `確定 ${counts.confirmed} / 未確定 ${counts.notFinal} / 中止 ${counts.cancelled} / 失敗 ${counts.missing}`,
+    buildWinningMatchSummaryLine(results),
     buildTopPayoutLine(results)
   ].filter(Boolean), blocks);
 
