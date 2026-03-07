@@ -126,6 +126,14 @@ jobs:
         if: steps.resolve-artifact.outputs.found == 'true'
         run: unzip -o "${{ steps.resolve-artifact.outputs.zip_path }}" -d "${{ env.PICK_STATE_DIR }}"
 
+      - name: Rebuild picked race state
+        if: steps.resolve-artifact.outputs.found != 'true'
+        env:
+          HIDUKE: ${{ env.HIDUKE }}
+          PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
+          PICK_STATE_ONLY: "1"
+        run: npm start
+
       - name: Run result notifier
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
