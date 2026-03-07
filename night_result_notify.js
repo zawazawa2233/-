@@ -7,6 +7,9 @@ import { getJstDateString } from "./lib/date.js";
 import { buildChunkedDiscordPayloads, deliverDiscordPayloads } from "./lib/discord.js";
 import { readPickedRaceState } from "./lib/pick-state.js";
 
+const HIGH_PAYOUT_THRESHOLD_YEN = 10000;
+const SUMMARY_HIGHLIGHT_LIMIT = 5;
+
 function parseEnvBoolean(value) {
   if (!value) {
     return false;
@@ -114,18 +117,32 @@ function formatRaceBlock(race, result) {
 }
 
 function buildTopPayoutLine(results) {
-  const topItems = results
+  const highPayoutItems = results
     .filter((item) => item.result.status === "confirmed" && item.result.trifecta.payoutYen !== null)
+    .filter((item) => item.result.trifecta.payoutYen >= HIGH_PAYOUT_THRESHOLD_YEN)
     .sort((left, right) => right.result.trifecta.payoutYen - left.result.trifecta.payoutYen)
-    .slice(0, 3)
+    .slice(0, SUMMARY_HIGHLIGHT_LIMIT)
     .map((item) => `${item.race.placeName} ${item.race.raceNo}R ${formatPayout(item.result.trifecta.payoutYen)}`);
 
-  return topItems.length > 0 ? `高配当: ${topItems.join(" / ")}` : null;
+  return highPayoutItems.length > 0 ? `高配当(1万円以上): ${highPayoutItems.join(" / ")}` : null;
 }
 
 function buildWinningMatchSummaryLine(results) {
   const matchedWins = results.filter(({ race, result }) => getWinningMatchReasons(race, result).length > 0);
-  return matchedWins.length > 0 ? `先頭一致: ${matchedWins.length}レース` : "先頭一致: 0レース";
+  if (matchedWins.length === 0) {
+    return "先頭一致: 0レース";
+  }
+
+  const highlighted = matchedWins
+    .slice(0, SUMMARY_HIGHLIGHT_LIMIT)
+    .map(({ race, result }) => {
+      const winningMatches = getWinningMatchReasons(race, result);
+      return `${race.placeName} ${race.raceNo}R ${winningMatches.map((reason) => reason.type).join("/")}`;
+    });
+
+  const remainingCount = matchedWins.length - highlighted.length;
+  const suffix = remainingCount > 0 ? ` / 他${remainingCount}レース` : "";
+  return `先頭一致: ${matchedWins.length}レース (${highlighted.join(" / ")}${suffix})`;
 }
 
 async function sendSummary(config, summaryLines, blocks = []) {
