@@ -1,6 +1,5 @@
 import {
   buildBoatraceResultUrl,
-  buildRaceResultFromPayoutMap,
   fetchBoatraceDailyPayouts,
   fetchBoatraceRaceResult
 } from "./lib/boatrace-results.js";
@@ -162,40 +161,41 @@ async function collectResults(state) {
 
   for (const race of state.races) {
     try {
-      let result = payoutLoadError
-        ? {
+      let result = await fetchBoatraceRaceResult({
+        hiduke: state.hiduke,
+        placeNo: race.placeNo,
+        raceNo: race.raceNo
+      });
+
+      if (
+        result.status === "missing" &&
+        !payoutLoadError &&
+        payoutMap.has(`${race.placeNo}-${race.raceNo}`)
+      ) {
+        const payoutFallback = payoutMap.get(`${race.placeNo}-${race.raceNo}`);
+        if (payoutFallback?.status === "confirmed") {
+          result = {
             hiduke: state.hiduke,
             placeNo: race.placeNo,
             raceNo: race.raceNo,
-            status: "missing",
+            status: "confirmed",
             trifecta: {
-              combination: null,
-              payoutYen: null
+              combination: payoutFallback.combination,
+              payoutYen: payoutFallback.payoutYen
             },
-            finishOrder: null,
+            finishOrder: payoutFallback.combination
+              .split("-")
+              .map((value) => Number.parseInt(value, 10)),
             resultUrl: buildBoatraceResultUrl({
               hiduke: state.hiduke,
               placeNo: race.placeNo,
               raceNo: race.raceNo
             }),
-            note: `Failed to load daily pay table: ${payoutLoadError.message}`
-          }
-        : buildRaceResultFromPayoutMap({
-            hiduke: state.hiduke,
-            placeNo: race.placeNo,
-            raceNo: race.raceNo,
-            payoutMap
-          });
-
-      if (result.status === "missing") {
-        const raceResult = await fetchBoatraceRaceResult({
-          hiduke: state.hiduke,
-          placeNo: race.placeNo,
-          raceNo: race.raceNo
-        });
-        if (raceResult.status !== "missing" || raceResult.trifecta.combination || raceResult.trifecta.payoutYen !== null) {
-          result = raceResult;
+            note: "個別結果ページ取得失敗のため日別払戻一覧で補完"
+          };
         }
+      } else if (result.status === "missing" && payoutLoadError) {
+        result.note = result.note || `Failed to load daily pay table: ${payoutLoadError.message}`;
       }
 
       results.push({ race, result });
