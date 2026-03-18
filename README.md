@@ -91,6 +91,43 @@ npm run start:night
 
 `DRY_RUN=1` なら、夜処理も Discord には送らず payload のみ出力します。
 
+買い目案を 1 レースだけ出す場合も、朝に保存された JSON が必要です。
+
+```bash
+export DRY_RUN="1"
+export HIDUKE="20260307"
+export PLACE_NAME="大村"
+export RACE_NO="4"
+npm run start:kaime
+```
+
+必要なら閾値も変えられます。
+
+```bash
+export ANA_MIN_COMBINED_ODDS="10"
+export HONMEI_MIN_COMBINED_ODDS="5"
+export MIN_TICKET_ODDS="0"
+npm run start:kaime
+```
+
+Discord Bot で slash command を受ける場合は、別途常駐プロセスが必要です。
+
+```bash
+export DISCORD_APPLICATION_ID="..."
+export DISCORD_PUBLIC_KEY="..."
+export PORT="3000"
+npm run start:bot
+```
+
+`/kaime place:大村 race:4 date:20260307` を登録するには次を使います。反映を早く確認したい場合は `DISCORD_GUILD_ID` を指定します。
+
+```bash
+export DISCORD_APPLICATION_ID="..."
+export DISCORD_BOT_TOKEN="..."
+export DISCORD_GUILD_ID="..."
+npm run register:discord
+```
+
 ## GitHub Actions
 
 朝ワークフロー [`daily.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/daily.yml) は次のタイミングで実行できます。

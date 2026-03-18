@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "start": "node daily_pick_kyoteibiyori.js",
-    "start:night": "node night_result_notify.js"
+    "start:night": "node night_result_notify.js",
+    "start:kaime": "node kaime_query.js",
+    "start:bot": "node discord_interactions.js",
+    "register:discord": "node register_discord_commands.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2",
