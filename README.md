@@ -102,7 +102,7 @@ npm run start:night
 
 夜ワークフロー [`night-results.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/night-results.yml) は次のタイミングで実行できます。
 
-- 毎日 `23:00 JST` の定期実行
+- 毎日 `22:50 JST` の定期実行
 - `workflow_dispatch` による手動実行
 
 夜ワークフローは朝の artifact を取得したあとで `npm run start:night` を実行します。artifact が見つからない場合はエラー終了せず、「朝の対象データが見つからないため結果通知をスキップしました」と Discord に通知します。
