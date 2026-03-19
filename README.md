@@ -35,7 +35,8 @@
 - `PICK_STATE_DIR` 任意。朝に保存する `picked-races-YYYYMMDD.json` と、夜に読む同ファイルの配置ディレクトリ。省略時は `artifacts`。
 - `KAIME_CONCURRENCY` 任意。朝の買い目オッズ取得並列数。デフォルト `3`。
 - `ANA_MIN_COMBINED_ODDS` 任意。穴狙いの最低合成オッズ。デフォルト `10`。
-- `HONMEI_MIN_COMBINED_ODDS` 任意。本命の最低合成オッズ。デフォルト `5`。
+- `HONMEI_MIN_COMBINED_ODDS` 任意。本命の最低合成オッズ。デフォルト `3`。
+- `HONMEI_MAX_COMBINED_ODDS` 任意。本命の最高合成オッズ。デフォルト `5`。
 - `MIN_TICKET_ODDS` 任意。各買い目単体の最低オッズ。デフォルト `0`。
 
 ## Discord Webhook の作成
@@ -109,7 +110,8 @@ npm run start:kaime
 
 ```bash
 export ANA_MIN_COMBINED_ODDS="10"
-export HONMEI_MIN_COMBINED_ODDS="5"
+export HONMEI_MIN_COMBINED_ODDS="3"
+export HONMEI_MAX_COMBINED_ODDS="5"
 export MIN_TICKET_ODDS="0"
 npm run start:kaime
 ```
