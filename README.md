@@ -1,6 +1,6 @@
 # Kyoteibiyori Daily Pick Bot
 
-朝は `kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報を DOM から取得して、条件一致レースを Discord Webhook に送信します。
+朝は `kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報を DOM から取得して、条件一致レースを Discord Webhook に送信します。条件一致レースがある場合は、続けて `boatrace.jp` の `3連単オッズ` を使った買い目案も Discord に送信します。
 
 夜は、朝に実際に送信したレース一覧を JSON として保存しておき、その同じレースだけを対象に `boatrace.jp` の公式結果ページから三連単と確定払戻金を取得して Discord Webhook に送信します。
 
@@ -33,6 +33,10 @@
 - `THROTTLE_MS` 任意。アクセス間隔ミリ秒。デフォルト `250`。
 - `DRY_RUN` 任意。`1` のとき Discord に送らず、送信予定の payload を標準出力に出します。
 - `PICK_STATE_DIR` 任意。朝に保存する `picked-races-YYYYMMDD.json` と、夜に読む同ファイルの配置ディレクトリ。省略時は `artifacts`。
+- `KAIME_CONCURRENCY` 任意。朝の買い目オッズ取得並列数。デフォルト `3`。
+- `ANA_MIN_COMBINED_ODDS` 任意。穴狙いの最低合成オッズ。デフォルト `10`。
+- `HONMEI_MIN_COMBINED_ODDS` 任意。本命の最低合成オッズ。デフォルト `5`。
+- `MIN_TICKET_ODDS` 任意。各買い目単体の最低オッズ。デフォルト `0`。
 
 ## Discord Webhook の作成
 
@@ -108,24 +112,6 @@ export ANA_MIN_COMBINED_ODDS="10"
 export HONMEI_MIN_COMBINED_ODDS="5"
 export MIN_TICKET_ODDS="0"
 npm run start:kaime
-```
-
-Discord Bot で slash command を受ける場合は、別途常駐プロセスが必要です。
-
-```bash
-export DISCORD_APPLICATION_ID="..."
-export DISCORD_PUBLIC_KEY="..."
-export PORT="3000"
-npm run start:bot
-```
-
-`/kaime place:大村 race:4 date:20260307` を登録するには次を使います。反映を早く確認したい場合は `DISCORD_GUILD_ID` を指定します。
-
-```bash
-export DISCORD_APPLICATION_ID="..."
-export DISCORD_BOT_TOKEN="..."
-export DISCORD_GUILD_ID="..."
-npm run register:discord
 ```
 
 ## GitHub Actions
