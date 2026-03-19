@@ -49,17 +49,106 @@ function formatPayout(value) {
   return value === null ? null : `${value.toLocaleString("ja-JP")}円`;
 }
 
-function getWinningBoat(result) {
-  return Array.isArray(result.finishOrder) && result.finishOrder.length > 0 ? result.finishOrder[0] : null;
-}
-
-function getWinningMatchReasons(race, result) {
-  const winningBoat = getWinningBoat(result);
-  if (!Number.isInteger(winningBoat)) {
-    return [];
+function formatOdds(value) {
+  if (typeof value !== "number") {
+    return null;
   }
 
-  return race.matchReasons.filter((reason) => reason.boat === winningBoat);
+  return `${value.toLocaleString("ja-JP", {
+    minimumFractionDigits: value < 100 ? 1 : 0,
+    maximumFractionDigits: 1
+  })}倍`;
+}
+
+function formatPrediction(prediction) {
+  if (!prediction) {
+    return "なし";
+  }
+
+  return `${prediction.boat}号艇 (${prediction.type})`;
+}
+
+function areSameTickets(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((ticket, index) => ticket === right[index]);
+}
+
+function planIncludesCombination(plan, combination) {
+  return Boolean(
+    plan &&
+    plan.status === "buy" &&
+    Array.isArray(plan.tickets) &&
+    combination &&
+    plan.tickets.includes(combination)
+  );
+}
+
+function buildKaimeJudgement(race, result) {
+  if (!race.kaime) {
+    return {
+      status: "unavailable",
+      hitTypes: [],
+      note: "朝の買い目情報なし"
+    };
+  }
+
+  if (race.kaime.status === "failed") {
+    return {
+      status: "unavailable",
+      hitTypes: [],
+      note: race.kaime.error ? `朝の買い目算出失敗: ${race.kaime.error}` : "朝の買い目算出失敗"
+    };
+  }
+
+  if (result.status === "not_final") {
+    return {
+      status: "pending",
+      hitTypes: [],
+      note: null
+    };
+  }
+
+  if (result.status === "cancelled") {
+    return {
+      status: "cancelled",
+      hitTypes: [],
+      note: "レース中止"
+    };
+  }
+
+  if (result.status !== "confirmed") {
+    return {
+      status: "unavailable",
+      hitTypes: [],
+      note: result.note || "結果取得失敗"
+    };
+  }
+
+  const combination = result.trifecta.combination;
+  const hitTypes = [];
+  if (planIncludesCombination(race.kaime.plans?.ana, combination)) {
+    hitTypes.push("穴");
+  }
+  if (planIncludesCombination(race.kaime.plans?.honmei, combination)) {
+    hitTypes.push("本命");
+  }
+
+  return {
+    status: hitTypes.length > 0 ? "hit" : "miss",
+    hitTypes,
+    note: null
+  };
+}
+
+function formatHitType(hitTypes) {
+  if (hitTypes.length === 0) {
+    return "";
+  }
+
+  return hitTypes.length >= 2 ? "共通" : hitTypes[0];
 }
 
 function formatHiduke(hiduke) {
@@ -70,9 +159,8 @@ function formatHiduke(hiduke) {
   return `${hiduke.slice(0, 4)}-${hiduke.slice(4, 6)}-${hiduke.slice(6, 8)}`;
 }
 
-function buildResultHeadline(race, result) {
-  const winningMatches = getWinningMatchReasons(race, result);
-  const prefix = winningMatches.length > 0 ? "◎ " : "";
+function buildResultHeadline(race, result, judgement) {
+  const prefix = judgement.status === "hit" ? "◎ " : "";
 
   if (result.status === "confirmed") {
     return `${prefix}【${race.placeName} ${race.raceNo}R】 ${result.trifecta.combination} / ${formatPayout(result.trifecta.payoutYen)}`;
@@ -89,18 +177,64 @@ function buildResultHeadline(race, result) {
   return `${prefix}【${race.placeName} ${race.raceNo}R】 取得失敗`;
 }
 
-function formatRaceBlock(race, result) {
-  const lines = [buildResultHeadline(race, result)];
-  const winningBoat = getWinningBoat(result);
-  const winningMatches = getWinningMatchReasons(race, result);
-  const reasons = race.matchReasons.map((reason) => {
-    const marker = reason.boat === winningBoat && winningMatches.length > 0 ? "◎" : "-";
-    return `${marker} ${formatMatchReason(reason)}`;
-  });
-
-  if (winningMatches.length > 0) {
-    lines.push(`先頭一致: ${winningBoat}号艇 (${winningMatches.map((reason) => reason.type).join(" / ")})`);
+function formatPlanLine(label, plan) {
+  if (!plan || plan.status !== "buy" || plan.tickets.length === 0) {
+    return `${label}: 該当なし`;
   }
+
+  const oddsLabel = formatOdds(plan.syntheticOdds);
+  return `${label}: ${plan.tickets.join(" / ")}${oddsLabel ? ` / 合成${oddsLabel}` : ""}`;
+}
+
+function formatKaimeOutcomeLine(result, judgement) {
+  if (judgement.status === "hit") {
+    return `買い目的中: ${formatHitType(judgement.hitTypes)} ${result.trifecta.combination}`;
+  }
+
+  if (judgement.status === "miss") {
+    return "買い目: 不的中";
+  }
+
+  if (judgement.status === "pending") {
+    return "買い目: 判定待ち";
+  }
+
+  if (judgement.status === "cancelled") {
+    return "買い目: 判定なし (中止)";
+  }
+
+  return `買い目: 判定不可${judgement.note ? ` (${judgement.note})` : ""}`;
+}
+
+function buildKaimeCandidateLines(race) {
+  if (!race.kaime || race.kaime.status !== "ok") {
+    return [];
+  }
+
+  const lines = [];
+  if (race.kaime.primaryPrediction) {
+    lines.push(`頭候補: ${formatPrediction(race.kaime.primaryPrediction)}`);
+  }
+
+  const anaPlan = race.kaime.plans.ana;
+  const honmeiPlan = race.kaime.plans.honmei;
+  if (anaPlan.status === "buy" && honmeiPlan.status === "buy" && areSameTickets(anaPlan.tickets, honmeiPlan.tickets)) {
+    const oddsLabel = formatOdds(anaPlan.syntheticOdds);
+    lines.push(`共通買い目: ${anaPlan.tickets.join(" / ")}${oddsLabel ? ` / 合成${oddsLabel}` : ""}`);
+    return lines;
+  }
+
+  lines.push("買い目候補:");
+  lines.push(formatPlanLine("穴", anaPlan));
+  lines.push(formatPlanLine("本命", honmeiPlan));
+  return lines;
+}
+
+function formatRaceBlock(race, result, judgement) {
+  const lines = [buildResultHeadline(race, result, judgement)];
+  const reasons = race.matchReasons.map((reason) => `- ${formatMatchReason(reason)}`);
+  lines.push(formatKaimeOutcomeLine(result, judgement));
+  lines.push(...buildKaimeCandidateLines(race));
 
   if (reasons.length > 0) {
     lines.push("条件:");
@@ -127,22 +261,26 @@ function buildTopPayoutLine(results) {
   return highPayoutItems.length > 0 ? `高配当(1万円以上): ${highPayoutItems.join(" / ")}` : null;
 }
 
-function buildWinningMatchSummaryLine(results) {
-  const matchedWins = results.filter(({ race, result }) => getWinningMatchReasons(race, result).length > 0);
-  if (matchedWins.length === 0) {
-    return "先頭一致: 0レース";
+function buildKaimeHitSummaryLine(results) {
+  const hitResults = results.filter((item) => item.judgement.status === "hit");
+  if (hitResults.length === 0) {
+    return "買い目的中: 0レース";
   }
 
-  const highlighted = matchedWins
+  const highlighted = hitResults
     .slice(0, SUMMARY_HIGHLIGHT_LIMIT)
-    .map(({ race, result }) => {
-      const winningMatches = getWinningMatchReasons(race, result);
-      return `${race.placeName} ${race.raceNo}R ${winningMatches.map((reason) => reason.type).join("/")}`;
+    .map(({ race, judgement }) => {
+      return `${race.placeName} ${race.raceNo}R ${formatHitType(judgement.hitTypes)}`;
     });
 
-  const remainingCount = matchedWins.length - highlighted.length;
+  const remainingCount = hitResults.length - highlighted.length;
   const suffix = remainingCount > 0 ? ` / 他${remainingCount}レース` : "";
-  return `先頭一致: ${matchedWins.length}レース (${highlighted.join(" / ")}${suffix})`;
+  return `買い目的中: ${hitResults.length}レース (${highlighted.join(" / ")}${suffix})`;
+}
+
+function buildKaimeUnavailableSummaryLine(results) {
+  const unavailableCount = results.filter((item) => item.judgement.status === "unavailable").length;
+  return unavailableCount > 0 ? `買い目判定不可: ${unavailableCount}レース` : null;
 }
 
 async function sendSummary(config, summaryLines, blocks = []) {
@@ -267,20 +405,24 @@ async function main() {
     return;
   }
 
-  const results = await collectResults(state);
+  const results = (await collectResults(state)).map((item) => ({
+    ...item,
+    judgement: buildKaimeJudgement(item.race, item.result)
+  }));
   const counts = {
     confirmed: results.filter((item) => item.result.status === "confirmed").length,
     notFinal: results.filter((item) => item.result.status === "not_final").length,
     cancelled: results.filter((item) => item.result.status === "cancelled").length,
     missing: results.filter((item) => item.result.status === "missing").length
   };
-  const blocks = results.map(({ race, result }) => formatRaceBlock(race, result));
+  const blocks = results.map(({ race, result, judgement }) => formatRaceBlock(race, result, judgement));
 
   const messages = await sendSummary(config, [
     `対象日: ${formatHiduke(state.hiduke)}`,
     `件数: ${state.races.length}レース`,
     `確定 ${counts.confirmed} / 未確定 ${counts.notFinal} / 中止 ${counts.cancelled} / 失敗 ${counts.missing}`,
-    buildWinningMatchSummaryLine(results),
+    buildKaimeHitSummaryLine(results),
+    buildKaimeUnavailableSummaryLine(results),
     buildTopPayoutLine(results)
   ].filter(Boolean), blocks);
 
