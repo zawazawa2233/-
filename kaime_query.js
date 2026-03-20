@@ -46,11 +46,7 @@ function loadConfig() {
     hiduke: process.env.HIDUKE?.trim() || undefined,
     placeNo: parseEnvInt(process.env.PLACE_NO, "PLACE_NO", { min: 1, max: 24 }),
     placeName: process.env.PLACE_NAME?.trim() || "",
-    raceNo: parseEnvInt(process.env.RACE_NO, "RACE_NO", { min: 1, max: 12, required: true }),
-    anaMinCombinedOdds: parseEnvInt(process.env.ANA_MIN_COMBINED_ODDS, "ANA_MIN_COMBINED_ODDS", { min: 1 }) ?? 10,
-    honmeiMinCombinedOdds: parseEnvInt(process.env.HONMEI_MIN_COMBINED_ODDS, "HONMEI_MIN_COMBINED_ODDS", { min: 1 }) ?? 3,
-    honmeiMaxCombinedOdds: parseEnvInt(process.env.HONMEI_MAX_COMBINED_ODDS, "HONMEI_MAX_COMBINED_ODDS", { min: 1 }) ?? 5,
-    minTicketOdds: parseEnvInt(process.env.MIN_TICKET_ODDS, "MIN_TICKET_ODDS", { min: 0 }) ?? 0
+    raceNo: parseEnvInt(process.env.RACE_NO, "RACE_NO", { min: 1, max: 12, required: true })
   };
 }
 

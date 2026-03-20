@@ -1,6 +1,6 @@
 # Kyoteibiyori Daily Pick Bot
 
-朝は `kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報を DOM から取得して、条件一致レースを Discord Webhook に送信します。条件一致レースがある場合は、続けて `boatrace.jp` の `3連単オッズ` を使った買い目案も Discord に送信します。
+朝は `kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報を DOM から取得して、`1号艇が逃げなさそう` な条件一致レースを Discord Webhook に送信します。条件一致レースがある場合は、続けて `逃げ危険度` と決まり手ルールベースの `本線 / 押さえ` 買い目案も Discord に送信します。
 
 夜は、朝に実際に送信したレース一覧と買い目候補を JSON として保存しておき、その同じレースだけを対象に `boatrace.jp` の公式結果ページから三連単と確定払戻金を取得して、朝の買い目候補が的中したかどうかを Discord Webhook に送信します。
 
@@ -19,7 +19,7 @@
 - `捲り`: 1号艇 `捲られ >= 10` かつ 2〜6号艇のどれか `捲り >= 10` かつ `捲り > 1号艇捲られ`
 - `捲り差し`: 1号艇 `捲られ差し >= 10` かつ 2〜6号艇のどれか `捲り差し >= 10` かつ `捲り差し > 1号艇捲られ差し`
 
-上記のいずれか1つでも成立したレースを Discord に送信します。Discord Webhook には下書き機能がないため、朝通知は `[DRAFT]` タイトル付きの `embed` として送信します。
+上記のいずれか1つでも成立したレースを Discord に送信します。各レースには `逃げ危険度 (S/A/B/C)` を付け、危険度の高い順に並べます。Discord Webhook には下書き機能がないため、朝通知は `[DRAFT]` タイトル付きの `embed` として送信します。
 
 朝処理では、対象レースと買い目候補を `picked-races-YYYYMMDD.json` として保存します。このファイルは GitHub Actions で artifact として引き継ぎ、夜の結果通知に使います。`PICK_STATE_ONLY=1` の再生成時も、夜判定に必要な買い目候補まで含めて保存します。
 
@@ -33,11 +33,7 @@
 - `THROTTLE_MS` 任意。アクセス間隔ミリ秒。デフォルト `250`。
 - `DRY_RUN` 任意。`1` のとき Discord に送らず、送信予定の payload を標準出力に出します。
 - `PICK_STATE_DIR` 任意。朝に保存する `picked-races-YYYYMMDD.json` と、夜に読む同ファイルの配置ディレクトリ。省略時は `artifacts`。
-- `KAIME_CONCURRENCY` 任意。朝の買い目オッズ取得並列数。デフォルト `3`。
-- `ANA_MIN_COMBINED_ODDS` 任意。穴狙いの最低合成オッズ。デフォルト `10`。
-- `HONMEI_MIN_COMBINED_ODDS` 任意。本命の最低合成オッズ。デフォルト `3`。
-- `HONMEI_MAX_COMBINED_ODDS` 任意。本命の最高合成オッズ。デフォルト `5`。
-- `MIN_TICKET_ODDS` 任意。各買い目単体の最低オッズ。デフォルト `0`。
+- `KAIME_CONCURRENCY` 任意。朝の買い目生成並列数。デフォルト `3`。
 
 ## Discord Webhook の作成
 
@@ -103,16 +99,6 @@ export DRY_RUN="1"
 export HIDUKE="20260307"
 export PLACE_NAME="大村"
 export RACE_NO="4"
-npm run start:kaime
-```
-
-必要なら閾値も変えられます。
-
-```bash
-export ANA_MIN_COMBINED_ODDS="10"
-export HONMEI_MIN_COMBINED_ODDS="3"
-export HONMEI_MAX_COMBINED_ODDS="5"
-export MIN_TICKET_ODDS="0"
 npm run start:kaime
 ```
 

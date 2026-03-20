@@ -49,17 +49,6 @@ function formatPayout(value) {
   return value === null ? null : `${value.toLocaleString("ja-JP")}円`;
 }
 
-function formatOdds(value) {
-  if (typeof value !== "number") {
-    return null;
-  }
-
-  return `${value.toLocaleString("ja-JP", {
-    minimumFractionDigits: value < 100 ? 1 : 0,
-    maximumFractionDigits: 1
-  })}倍`;
-}
-
 function formatPrediction(prediction) {
   if (!prediction) {
     return "なし";
@@ -130,10 +119,10 @@ function buildKaimeJudgement(race, result) {
   const combination = result.trifecta.combination;
   const hitTypes = [];
   if (planIncludesCombination(race.kaime.plans?.ana, combination)) {
-    hitTypes.push("穴");
+    hitTypes.push("押さえ");
   }
   if (planIncludesCombination(race.kaime.plans?.honmei, combination)) {
-    hitTypes.push("本命");
+    hitTypes.push("本線");
   }
 
   return {
@@ -182,8 +171,7 @@ function formatPlanLine(label, plan) {
     return `${label}: 該当なし`;
   }
 
-  const oddsLabel = formatOdds(plan.syntheticOdds);
-  return `${label}: ${plan.tickets.join(" / ")}${oddsLabel ? ` / 合成${oddsLabel}` : ""}`;
+  return `${label}: ${plan.tickets.join(" / ")}`;
 }
 
 function formatKaimeOutcomeLine(result, judgement) {
@@ -219,20 +207,22 @@ function buildKaimeCandidateLines(race) {
   const anaPlan = race.kaime.plans.ana;
   const honmeiPlan = race.kaime.plans.honmei;
   if (anaPlan.status === "buy" && honmeiPlan.status === "buy" && areSameTickets(anaPlan.tickets, honmeiPlan.tickets)) {
-    const oddsLabel = formatOdds(anaPlan.syntheticOdds);
-    lines.push(`共通買い目: ${anaPlan.tickets.join(" / ")}${oddsLabel ? ` / 合成${oddsLabel}` : ""}`);
+    lines.push(`共通買い目: ${anaPlan.tickets.join(" / ")}`);
     return lines;
   }
 
   lines.push("買い目候補:");
-  lines.push(formatPlanLine("穴", anaPlan));
-  lines.push(formatPlanLine("本命", honmeiPlan));
+  lines.push(formatPlanLine("本線", honmeiPlan));
+  lines.push(formatPlanLine("押さえ", anaPlan));
   return lines;
 }
 
 function formatRaceBlock(race, result, judgement) {
   const lines = [buildResultHeadline(race, result, judgement)];
   const reasons = race.matchReasons.map((reason) => `- ${formatMatchReason(reason)}`);
+  if (race.escapeRisk) {
+    lines.push(`逃げ危険度: ${race.escapeRisk.label} (${race.escapeRisk.score}) ${race.escapeRisk.summary}`);
+  }
   lines.push(formatKaimeOutcomeLine(result, judgement));
   lines.push(...buildKaimeCandidateLines(race));
 
