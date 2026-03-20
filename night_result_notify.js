@@ -57,14 +57,6 @@ function formatPrediction(prediction) {
   return `${prediction.boat}号艇 (${prediction.type})`;
 }
 
-function areSameTickets(left, right) {
-  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((ticket, index) => ticket === right[index]);
-}
-
 function planIncludesCombination(plan, combination) {
   return Boolean(
     plan &&
@@ -166,12 +158,19 @@ function buildResultHeadline(race, result, judgement) {
   return `${prefix}【${race.placeName} ${race.raceNo}R】 取得失敗`;
 }
 
-function formatPlanLine(label, plan) {
-  if (!plan || plan.status !== "buy" || plan.tickets.length === 0) {
-    return `${label}: 該当なし`;
+function buildDisplayTickets(plans) {
+  const tickets = [];
+  for (const ticket of plans.honmei.tickets) {
+    if (!tickets.includes(ticket)) {
+      tickets.push(ticket);
+    }
   }
-
-  return `${label}: ${plan.tickets.join(" / ")}`;
+  for (const ticket of plans.ana.tickets) {
+    if (!tickets.includes(ticket)) {
+      tickets.push(ticket);
+    }
+  }
+  return tickets;
 }
 
 function formatKaimeOutcomeLine(result, judgement) {
@@ -203,26 +202,14 @@ function buildKaimeCandidateLines(race) {
   if (race.kaime.primaryPrediction) {
     lines.push(`頭候補: ${formatPrediction(race.kaime.primaryPrediction)}`);
   }
-
-  const anaPlan = race.kaime.plans.ana;
-  const honmeiPlan = race.kaime.plans.honmei;
-  if (anaPlan.status === "buy" && honmeiPlan.status === "buy" && areSameTickets(anaPlan.tickets, honmeiPlan.tickets)) {
-    lines.push(`共通買い目: ${anaPlan.tickets.join(" / ")}`);
-    return lines;
-  }
-
   lines.push("買い目候補:");
-  lines.push(formatPlanLine("本線", honmeiPlan));
-  lines.push(formatPlanLine("押さえ", anaPlan));
+  lines.push(...buildDisplayTickets(race.kaime.plans).map((ticket) => `- ${ticket}`));
   return lines;
 }
 
 function formatRaceBlock(race, result, judgement) {
   const lines = [buildResultHeadline(race, result, judgement)];
   const reasons = race.matchReasons.map((reason) => `- ${formatMatchReason(reason)}`);
-  if (race.escapeRisk) {
-    lines.push(`逃げ危険度: ${race.escapeRisk.label} (${race.escapeRisk.score}) ${race.escapeRisk.summary}`);
-  }
   lines.push(formatKaimeOutcomeLine(result, judgement));
   lines.push(...buildKaimeCandidateLines(race));
 
@@ -232,10 +219,6 @@ function formatRaceBlock(race, result, judgement) {
   }
 
   lines.push(`結果: ${result.resultUrl}`);
-
-  if (result.note) {
-    lines.push(`備考: ${result.note}`);
-  }
 
   return lines.join("\n");
 }
