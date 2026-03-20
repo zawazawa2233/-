@@ -173,6 +173,36 @@ function buildDisplayTickets(plans) {
   return tickets;
 }
 
+function formatTicketLines(tickets) {
+  if (tickets.length === 0) {
+    return ["- なし"];
+  }
+
+  const grouped = new Map();
+
+  for (const ticket of tickets) {
+    const parts = ticket.split("-");
+    if (parts.length !== 3) {
+      if (!grouped.has(ticket)) {
+        grouped.set(ticket, []);
+      }
+      continue;
+    }
+
+    const [head, second, third] = parts;
+    const key = `${head}-${second}`;
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+    }
+    const thirds = grouped.get(key);
+    if (!thirds.includes(third)) {
+      thirds.push(third);
+    }
+  }
+
+  return [...grouped.entries()].map(([key, thirds]) => thirds.length > 0 ? `- ${key}-${thirds.join(",")}` : `- ${key}`);
+}
+
 function formatKaimeOutcomeLine(result, judgement) {
   if (judgement.status === "hit") {
     return `買い目的中: ${formatHitType(judgement.hitTypes)} ${result.trifecta.combination}`;
@@ -203,7 +233,7 @@ function buildKaimeCandidateLines(race) {
     lines.push(`頭候補: ${formatPrediction(race.kaime.primaryPrediction)}`);
   }
   lines.push("買い目候補:");
-  lines.push(...buildDisplayTickets(race.kaime.plans).map((ticket) => `- ${ticket}`));
+  lines.push(...formatTicketLines(buildDisplayTickets(race.kaime.plans)));
   return lines;
 }
 
