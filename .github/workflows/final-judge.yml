@@ -1,0 +1,153 @@
+name: Final Kyoteibiyori Judge
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      hiduke:
+        description: "YYYYMMDD (default: today in JST)"
+        required: false
+        type: string
+      source_run_id:
+        description: "Specific run ID to download picked-races artifact from"
+        required: false
+        type: string
+
+concurrency:
+  group: final-judge-${{ github.event.inputs.hiduke || 'auto' }}
+  cancel-in-progress: false
+
+jobs:
+  run-final-judge:
+    runs-on: ubuntu-latest
+    env:
+      PICK_STATE_DIR: artifacts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve HIDUKE
+        run: |
+          if [ -n "${{ github.event.inputs.hiduke }}" ]; then
+            echo "HIDUKE=${{ github.event.inputs.hiduke }}" >> "$GITHUB_ENV"
+          else
+            echo "HIDUKE=$(TZ=Asia/Tokyo date +%Y%m%d)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Resolve source run ID
+        run: |
+          if [ -n "${{ github.event.inputs.source_run_id }}" ]; then
+            echo "SOURCE_RUN_ID=${{ github.event.inputs.source_run_id }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Resolve picked race state artifact
+        uses: actions/github-script@v7
+        id: resolve-artifact
+        with:
+          script: |
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const targetName = `picked-races-${process.env.HIDUKE}`;
+            const outputDir = process.env.PICK_STATE_DIR;
+            const sourceRunId = (process.env.SOURCE_RUN_ID || "").trim();
+
+            let match = null;
+
+            if (sourceRunId) {
+              core.info(`Searching artifact: ${targetName} in run ${sourceRunId}`);
+              const response = await github.rest.actions.listWorkflowRunArtifacts({
+                owner,
+                repo,
+                run_id: Number(sourceRunId),
+                per_page: 100
+              });
+
+              match = response.data.artifacts.find((artifact) => artifact && artifact.name === targetName) || null;
+              if (match?.expired) {
+                core.warning(`Artifact expired: ${targetName} in run ${sourceRunId}`);
+                core.setOutput("found", "false");
+                return;
+              }
+            } else {
+              core.info(`Searching artifact: ${targetName}`);
+              const artifacts = await github.paginate(
+                github.rest.actions.listArtifactsForRepo,
+                {
+                  owner,
+                  repo,
+                  per_page: 100
+                },
+                (response) => response.data.artifacts
+              );
+
+              match = artifacts
+                .filter((artifact) => artifact && artifact.name === targetName && !artifact.expired)
+                .sort((left, right) => new Date(right.created_at) - new Date(left.created_at))[0] || null;
+            }
+
+            if (!match) {
+              core.warning(`Artifact not found: ${targetName}`);
+              core.setOutput("found", "false");
+              return;
+            }
+
+            core.info(`Downloading artifact id=${match.id}`);
+            const download = await github.rest.actions.downloadArtifact({
+              owner,
+              repo,
+              artifact_id: match.id,
+              archive_format: "zip"
+            });
+
+            fs.mkdirSync(outputDir, { recursive: true });
+            const zipPath = path.join(outputDir, `${targetName}.zip`);
+            fs.writeFileSync(zipPath, Buffer.from(download.data));
+
+            core.setOutput("found", "true");
+            core.setOutput("zip_path", zipPath);
+            core.info(`Saved artifact zip: ${zipPath}`);
+        env:
+          HIDUKE: ${{ env.HIDUKE }}
+          PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
+          SOURCE_RUN_ID: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Extract picked race state zip
+        if: steps.resolve-artifact.outputs.found == 'true'
+        run: unzip -o "${{ steps.resolve-artifact.outputs.zip_path }}" -d "${{ env.PICK_STATE_DIR }}"
+
+      - name: Rebuild picked race state
+        if: steps.resolve-artifact.outputs.found != 'true'
+        env:
+          HIDUKE: ${{ env.HIDUKE }}
+          PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
+          PICK_STATE_ONLY: "1"
+        run: npm start
+
+      - name: Run final judge
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HIDUKE: ${{ env.HIDUKE }}
+          PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
+        run: npm run start:final
+
+      - name: Upload updated picked race state
+        uses: actions/upload-artifact@v4
+        with:
+          name: picked-races-${{ env.HIDUKE }}
+          path: ${{ env.PICK_STATE_DIR }}/picked-races-${{ env.HIDUKE }}.json
+          if-no-files-found: error
+          retention-days: 2

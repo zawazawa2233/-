@@ -67,8 +67,64 @@ function planIncludesCombination(plan, combination) {
   );
 }
 
-function buildKaimeJudgement(race, result) {
+function buildDisplayTicketsFromMorning(plans) {
+  const tickets = [];
+  for (const ticket of plans.honmei.tickets) {
+    if (!tickets.includes(ticket)) {
+      tickets.push(ticket);
+    }
+  }
+  for (const ticket of plans.ana.tickets) {
+    if (!tickets.includes(ticket)) {
+      tickets.push(ticket);
+    }
+  }
+  return tickets;
+}
+
+function getResolvedKaime(race) {
+  if (
+    race.final &&
+    race.final.status === "sent" &&
+    Array.isArray(race.final.tickets) &&
+    race.final.tickets.length > 0
+  ) {
+    return {
+      source: "final",
+      status: "ok",
+      tickets: race.final.tickets,
+      prediction: race.final.mainHead && race.final.mainType
+        ? { boat: race.final.mainHead, type: race.final.mainType }
+        : null
+    };
+  }
+
   if (!race.kaime) {
+    return null;
+  }
+
+  if (race.kaime.status !== "ok") {
+    return {
+      source: "morning",
+      status: race.kaime.status,
+      error: race.kaime.error || null,
+      tickets: [],
+      prediction: race.kaime.primaryPrediction || null
+    };
+  }
+
+  return {
+    source: "morning",
+    status: "ok",
+    tickets: buildDisplayTicketsFromMorning(race.kaime.plans),
+    prediction: race.kaime.primaryPrediction || null
+  };
+}
+
+function buildKaimeJudgement(race, result) {
+  const resolvedKaime = getResolvedKaime(race);
+
+  if (!resolvedKaime) {
     return {
       status: "unavailable",
       hitTypes: [],
@@ -76,11 +132,11 @@ function buildKaimeJudgement(race, result) {
     };
   }
 
-  if (race.kaime.status === "failed") {
+  if (resolvedKaime.status === "failed") {
     return {
       status: "unavailable",
       hitTypes: [],
-      note: race.kaime.error ? `朝の買い目算出失敗: ${race.kaime.error}` : "朝の買い目算出失敗"
+      note: resolvedKaime.error ? `朝の買い目算出失敗: ${resolvedKaime.error}` : "朝の買い目算出失敗"
     };
   }
 
@@ -110,10 +166,14 @@ function buildKaimeJudgement(race, result) {
 
   const combination = result.trifecta.combination;
   const hitTypes = [];
-  if (planIncludesCombination(race.kaime.plans?.ana, combination)) {
+  if (resolvedKaime.source === "final") {
+    if (resolvedKaime.tickets.includes(combination)) {
+      hitTypes.push("最終");
+    }
+  } else if (planIncludesCombination(race.kaime.plans?.ana, combination)) {
     hitTypes.push("押さえ");
   }
-  if (planIncludesCombination(race.kaime.plans?.honmei, combination)) {
+  if (resolvedKaime.source !== "final" && planIncludesCombination(race.kaime.plans?.honmei, combination)) {
     hitTypes.push("本線");
   }
 
@@ -159,18 +219,7 @@ function buildResultHeadline(race, result, judgement) {
 }
 
 function buildDisplayTickets(plans) {
-  const tickets = [];
-  for (const ticket of plans.honmei.tickets) {
-    if (!tickets.includes(ticket)) {
-      tickets.push(ticket);
-    }
-  }
-  for (const ticket of plans.ana.tickets) {
-    if (!tickets.includes(ticket)) {
-      tickets.push(ticket);
-    }
-  }
-  return tickets;
+  return buildDisplayTicketsFromMorning(plans);
 }
 
 function formatTicketLines(tickets) {
@@ -224,16 +273,17 @@ function formatKaimeOutcomeLine(result, judgement) {
 }
 
 function buildKaimeCandidateLines(race) {
-  if (!race.kaime || race.kaime.status !== "ok") {
+  const resolvedKaime = getResolvedKaime(race);
+  if (!resolvedKaime || resolvedKaime.status !== "ok") {
     return [];
   }
 
   const lines = [];
-  if (race.kaime.primaryPrediction) {
-    lines.push(`頭候補: ${formatPrediction(race.kaime.primaryPrediction)}`);
+  if (resolvedKaime.prediction) {
+    lines.push(`頭候補: ${formatPrediction(resolvedKaime.prediction)}`);
   }
-  lines.push("買い目候補:");
-  lines.push(...formatTicketLines(buildDisplayTickets(race.kaime.plans)));
+  lines.push(resolvedKaime.source === "final" ? "最終買い目:" : "買い目候補:");
+  lines.push(...formatTicketLines(resolvedKaime.tickets));
   return lines;
 }
 

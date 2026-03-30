@@ -2,6 +2,8 @@
 
 朝は `kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報を DOM から取得して、`1号艇が逃げなさそう` な条件一致レースを Discord Webhook に送信します。条件一致レースがある場合は、続けて決まり手ルールベースの買い目案も Discord に送信します。
 
+展示後は、朝に保存した `picked-races-YYYYMMDD.json` をもとに 5 分おきで巡回し、発走 15 分以内かつ未送信のレースだけを対象に再判定します。主軸頭は朝の最上位理由を基本維持しつつ、展示後データから展開頭を最大 2 艇まで追加して、三連単を最大 24 点まで採用します。合成オッズが 8.5 倍以上なら Discord に最終判定を送信し、送信結果は同じ `picked-races-YYYYMMDD.json` に保存し直します。
+
 夜は、朝に実際に送信したレース一覧と買い目候補を JSON として保存しておき、その同じレースだけを対象に `boatrace.jp` の公式結果ページから三連単と確定払戻金を取得して、朝の買い目候補が的中したかどうかを Discord Webhook に送信します。
 
 ページは最初に `データ取得中…` と表示されるため、朝処理は静的 HTML ではなくブラウザ描画後の DOM を使います。開催がないページで `データはありません` と出る場合は、失敗ではなくスキップとして扱います。
@@ -22,6 +24,8 @@
 上記のいずれか1つでも成立したレースを Discord に送信します。レースの並び順には内部で優先度を使いますが、通知文面は簡潔に保ちます。Discord Webhook には下書き機能がないため、朝通知は `[DRAFT]` タイトル付きの `embed` として送信します。
 
 朝処理では、対象レースと買い目候補を `picked-races-YYYYMMDD.json` として保存します。このファイルは GitHub Actions で artifact として引き継ぎ、夜の結果通知に使います。`PICK_STATE_ONLY=1` の再生成時も、夜判定に必要な買い目候補まで含めて保存します。
+
+最終ジャッジが送信した買い目は同じ state ファイルの `final` フィールドに保存され、夜の結果通知では `final.tickets` を優先して判定します。最終ジャッジが未送信のレースだけ朝の買い目候補にフォールバックします。
 
 ## 環境変数
 
@@ -92,6 +96,16 @@ npm run start:night
 
 `DRY_RUN=1` なら、夜処理も Discord には送らず payload のみ出力します。
 
+展示後の最終ジャッジだけをローカル実行する場合も、朝に保存された JSON が必要です。
+
+```bash
+export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+export HIDUKE="20260302"
+npm run start:final
+```
+
+`DRY_RUN=1` なら、最終ジャッジも Discord には送らず payload のみ出力します。
+
 買い目案を 1 レースだけ出す場合も、朝に保存された JSON が必要です。
 
 ```bash
@@ -110,6 +124,13 @@ npm run start:kaime
 - `workflow_dispatch` による手動実行
 
 実行時には Playwright Chromium をインストールしたあとで `npm start` を実行し、`picked-races-YYYYMMDD.json` を artifact として 2 日保持します。
+
+展示後ワークフロー [`final-judge.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/final-judge.yml) は 5 分おきに実行できます。
+
+- `schedule` による 5 分巡回
+- `workflow_dispatch` による手動実行
+
+最終ジャッジは最新の `picked-races-YYYYMMDD` artifact を取得して `npm run start:final` を実行し、送信済み状態を更新した JSON を同じ artifact 名で再アップロードします。
 
 夜ワークフロー [`night-results.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/night-results.yml) は次のタイミングで実行できます。
 

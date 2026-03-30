@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node daily_pick_kyoteibiyori.js",
+    "start:final": "node final_judge_notify.js",
     "start:night": "node night_result_notify.js",
     "start:kaime": "node kaime_query.js",
     "start:bot": "node discord_interactions.js",
