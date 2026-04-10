@@ -31,7 +31,8 @@
 
 - `DISCORD_WEBHOOK_URL` 必須。Discord Webhook URL。
 - `HIDUKE` 任意。`YYYYMMDD`。省略時は JST の今日。
-- `PLACE_NO_LIST` 任意。例: `20,3`。指定時はその場だけ巡回。省略時は `index.php?hiduke=...` から開催場を自動判定し、取得失敗時のみ `1..24` にフォールバックします。
+- `PLACE_NO_LIST` 任意。例: `20,3`。指定時はその場だけ巡回。省略時は既定で `1..24` を走査します。
+- `AUTO_DETECT_PLACE_NOS` 任意。`1` のときだけ `index.php?hiduke=...` から開催場を自動判定します。判定に失敗した場合は `1..24` にフォールバックします。
 - `RACE_NO_LIST` 任意。例: `1,2,3,4,5,6,7,8,9,10,11,12`。省略時は `1..12`。
 - `CONCURRENCY` 任意。並列数。デフォルト `2`。
 - `THROTTLE_MS` 任意。アクセス間隔ミリ秒。デフォルト `250`。
@@ -134,7 +135,7 @@ npm run start:kaime
 
 夜ワークフロー [`night-results.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/night-results.yml) は次のタイミングで実行できます。
 
-- 毎日 `22:50 JST` の定期実行
+- 毎日 `23:00 JST` の定期実行
 - `workflow_dispatch` による手動実行
 
 夜ワークフローは朝の artifact を取得したあとで `npm run start:night` を実行します。artifact が見つからない場合は `PICK_STATE_ONLY=1` で pick state を再生成してから夜通知を実行します。再生成した state に買い目候補を載せられない場合でもジョブは落とさず、夜通知ではそのレースを `買い目判定不可` として扱います。
