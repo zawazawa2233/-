@@ -2,7 +2,7 @@ name: Night Kyoteibiyori Results
 
 on:
   schedule:
-    - cron: "50 13 * * *"
+    - cron: "0 14 * * *"
   workflow_dispatch:
     inputs:
       hiduke:
@@ -75,7 +75,7 @@ jobs:
 
               match = response.data.artifacts.find((artifact) => artifact && artifact.name === targetName) || null;
               if (match?.expired) {
-                core.warning(`Artifact expired: ${targetName} in run ${sourceRunId}`);
+                core.notice(`Artifact expired: ${targetName} in run ${sourceRunId}; rebuilding pick state instead`);
                 core.setOutput("found", "false");
                 return;
               }
@@ -97,7 +97,7 @@ jobs:
             }
 
             if (!match) {
-              core.warning(`Artifact not found: ${targetName}`);
+              core.notice(`Artifact not found: ${targetName}; rebuilding pick state instead`);
               core.setOutput("found", "false");
               return;
             }
