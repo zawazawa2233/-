@@ -42,6 +42,10 @@ function formatPercent(value) {
 }
 
 function formatMatchReason(reason) {
+  if (reason.selectionLevel === "st-rank-4-watch") {
+    return `4まくり高期待値: 3号艇ST順位 ${reason.defense.toFixed(2)} / 4号艇ST順位 ${reason.attack.toFixed(2)} / 3基本消し`;
+  }
+
   return `${reason.type}: ${reason.boat}号艇 ${formatPercent(reason.attack)} > 1号艇${reason.defenseLabel} ${formatPercent(reason.defense)}`;
 }
 
@@ -303,6 +307,57 @@ function formatRaceBlock(race, result, judgement) {
   return lines.join("\n");
 }
 
+function getDeadlineMinutes(value) {
+  const match = String(value || "").match(/^([0-2]?\d):(\d{2})$/);
+  if (!match) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return (Number.parseInt(match[1], 10) * 60) + Number.parseInt(match[2], 10);
+}
+
+function getResultDisplayGroup(item) {
+  if (item.judgement.status === "hit") {
+    return 0;
+  }
+  if (item.result.status === "confirmed") {
+    return 1;
+  }
+  if (item.result.status === "not_final") {
+    return 2;
+  }
+  if (item.result.status === "cancelled") {
+    return 3;
+  }
+  return 4;
+}
+
+function compareResultDisplayOrder(left, right) {
+  const leftGroup = getResultDisplayGroup(left);
+  const rightGroup = getResultDisplayGroup(right);
+  if (leftGroup !== rightGroup) {
+    return leftGroup - rightGroup;
+  }
+
+  if (leftGroup === 0) {
+    const leftPayout = left.result.trifecta?.payoutYen ?? 0;
+    const rightPayout = right.result.trifecta?.payoutYen ?? 0;
+    if (leftPayout !== rightPayout) {
+      return rightPayout - leftPayout;
+    }
+  }
+
+  const leftDeadline = getDeadlineMinutes(left.race.deadlineTime);
+  const rightDeadline = getDeadlineMinutes(right.race.deadlineTime);
+  if (leftDeadline !== rightDeadline) {
+    return leftDeadline - rightDeadline;
+  }
+  if (left.race.placeNo !== right.race.placeNo) {
+    return left.race.placeNo - right.race.placeNo;
+  }
+  return left.race.raceNo - right.race.raceNo;
+}
+
 function buildTopPayoutLine(results) {
   const highPayoutItems = results
     .filter((item) => item.result.status === "confirmed" && item.result.trifecta.payoutYen !== null)
@@ -468,7 +523,8 @@ async function main() {
     cancelled: results.filter((item) => item.result.status === "cancelled").length,
     missing: results.filter((item) => item.result.status === "missing").length
   };
-  const blocks = results.map(({ race, result, judgement }) => formatRaceBlock(race, result, judgement));
+  const displayResults = [...results].sort(compareResultDisplayOrder);
+  const blocks = displayResults.map(({ race, result, judgement }) => formatRaceBlock(race, result, judgement));
 
   const messages = await sendSummary(config, [
     `対象日: ${formatHiduke(state.hiduke)}`,
