@@ -40,6 +40,8 @@
 - `PICK_STATE_DIR` 任意。朝に保存する `picked-races-YYYYMMDD.json` と、夜に読む同ファイルの配置ディレクトリ。省略時は `artifacts`。
 - `KAIME_CONCURRENCY` 任意。朝の買い目生成並列数。デフォルト `3`。
 - `FINAL_TARGET_SYNTHETIC_ODDS` 任意。展示後最終ジャッジの目標合成オッズ。デフォルト `8.5`。
+- `PICK_VALUE_MODE` 任意。朝の選定モード。デフォルト `high-value` は穴期待値寄りに `3頭捲り`、`4まくり高期待値`、強い `3頭捲り差し` だけを残します。従来どおり条件一致をすべて残す場合は `all`。
+- `RESULT_CONCURRENCY` 任意。夜の公式結果ページ取得並列数。デフォルト `6`。
 
 ## Discord Webhook の作成
 
@@ -136,7 +138,7 @@ npm run start:kaime
 
 夜ワークフロー [`night-results.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/night-results.yml) は次のタイミングで実行できます。
 
-- 毎日 `23:00 JST` の定期実行
+- 毎日 `23:05 JST` の定期実行
 - `workflow_dispatch` による手動実行
 
 夜ワークフローは朝の artifact を取得したあとで `npm run start:night` を実行します。artifact が見つからない場合は `PICK_STATE_ONLY=1` で pick state を再生成してから夜通知を実行します。再生成した state に買い目候補を載せられない場合でもジョブは落とさず、夜通知ではそのレースを `買い目判定不可` として扱います。
