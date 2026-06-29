@@ -6,9 +6,11 @@ import {
 import { getJstDateString } from "./lib/date.js";
 import { buildChunkedDiscordPayloads, deliverDiscordPayloads } from "./lib/discord.js";
 import { readPickedRaceState } from "./lib/pick-state.js";
+import { pathToFileURL } from "node:url";
 
 const HIGH_PAYOUT_THRESHOLD_YEN = 10000;
 const SUMMARY_HIGHLIGHT_LIMIT = 5;
+const STAKE_PER_TICKET_YEN = 100;
 
 function parseEnvBoolean(value) {
   if (!value) {
@@ -16,6 +18,23 @@ function parseEnvBoolean(value) {
   }
 
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function parseEnvInt(value, name, defaultValue, min) {
+  if (!value) {
+    return defaultValue;
+  }
+
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${name} must be an integer`);
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < min) {
+    throw new Error(`${name} must be >= ${min}`);
+  }
+
+  return parsed;
 }
 
 function loadConfig() {
@@ -33,7 +52,8 @@ function loadConfig() {
   return {
     webhookUrl,
     hiduke,
-    dryRun
+    dryRun,
+    resultConcurrency: parseEnvInt(process.env.RESULT_CONCURRENCY, "RESULT_CONCURRENCY", 6, 1)
   };
 }
 
@@ -51,6 +71,11 @@ function formatMatchReason(reason) {
 
 function formatPayout(value) {
   return value === null ? null : `${value.toLocaleString("ja-JP")}円`;
+}
+
+function formatSignedPayout(value) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toLocaleString("ja-JP")}円`;
 }
 
 function formatPrediction(prediction) {
@@ -258,7 +283,7 @@ function formatTicketLines(tickets) {
 
 function formatKaimeOutcomeLine(result, judgement) {
   if (judgement.status === "hit") {
-    return `買い目的中: ${formatHitType(judgement.hitTypes)} ${result.trifecta.combination}`;
+    return `買い目的中: ${formatHitType(judgement.hitTypes)} ${result.trifecta.combination} / 払戻 ${formatPayout(result.trifecta.payoutYen)}`;
   }
 
   if (judgement.status === "miss") {
@@ -391,6 +416,56 @@ function buildKaimeUnavailableSummaryLine(results) {
   return unavailableCount > 0 ? `買い目判定不可: ${unavailableCount}レース` : null;
 }
 
+export function buildSettlementStats(results) {
+  const stats = {
+    raceCount: 0,
+    hitCount: 0,
+    ticketCount: 0,
+    stakeYen: 0,
+    payoutYen: 0
+  };
+
+  for (const item of results) {
+    if (!["hit", "miss"].includes(item.judgement.status)) {
+      continue;
+    }
+
+    const resolvedKaime = getResolvedKaime(item.race);
+    if (!resolvedKaime || resolvedKaime.status !== "ok" || resolvedKaime.tickets.length === 0) {
+      continue;
+    }
+
+    stats.raceCount += 1;
+    stats.ticketCount += resolvedKaime.tickets.length;
+    stats.stakeYen += resolvedKaime.tickets.length * STAKE_PER_TICKET_YEN;
+
+    if (item.judgement.status === "hit") {
+      stats.hitCount += 1;
+      stats.payoutYen += item.result.trifecta.payoutYen || 0;
+    }
+  }
+
+  return stats;
+}
+
+export function buildSettlementSummaryLine(results) {
+  const stats = buildSettlementStats(results);
+  if (stats.raceCount === 0) {
+    return "収支: 判定対象なし";
+  }
+
+  const roi = stats.stakeYen > 0 ? (stats.payoutYen / stats.stakeYen) * 100 : 0;
+  const balanceYen = stats.payoutYen - stats.stakeYen;
+  return [
+    `収支: ${stats.hitCount}/${stats.raceCount}的中`,
+    `購入 ${stats.ticketCount}点`,
+    `投資 ${formatPayout(stats.stakeYen)}`,
+    `払戻 ${formatPayout(stats.payoutYen)}`,
+    `回収率 ${formatPercent(roi)}`,
+    `差引 ${formatSignedPayout(balanceYen)}`
+  ].join(" / ");
+}
+
 async function sendSummary(config, summaryLines, blocks = []) {
   const payloads = buildChunkedDiscordPayloads({
     baseTitle: "kyoteibiyori ピックアップレース結果",
@@ -409,20 +484,38 @@ async function sendSummary(config, summaryLines, blocks = []) {
   return payloads.length;
 }
 
-async function collectResults(state) {
-  let payoutMap = new Map();
+async function collectResults(state, config) {
+  let payoutMap = null;
+  let payoutMapPromise = null;
   let payoutLoadError = null;
 
-  try {
-    payoutMap = await fetchBoatraceDailyPayouts(state.hiduke);
-  } catch (error) {
-    payoutLoadError = error;
-    console.error(`[pay-table-failed] ${error.message}`);
-  }
+  const loadPayoutMap = async () => {
+    if (payoutMap) {
+      return payoutMap;
+    }
+    if (payoutMapPromise) {
+      return payoutMapPromise;
+    }
+
+    payoutMapPromise = (async () => {
+      try {
+        payoutMap = await fetchBoatraceDailyPayouts(state.hiduke);
+      } catch (error) {
+        payoutLoadError = error;
+        payoutMap = new Map();
+        console.error(`[pay-table-failed] ${error.message}`);
+      }
+
+      return payoutMap;
+    })();
+
+    return payoutMapPromise;
+  };
 
   const results = [];
+  let nextIndex = 0;
 
-  for (const race of state.races) {
+  async function processRace(race) {
     try {
       let result = await fetchBoatraceRaceResult({
         hiduke: state.hiduke,
@@ -430,13 +523,10 @@ async function collectResults(state) {
         raceNo: race.raceNo
       });
 
-      if (
-        result.status === "missing" &&
-        !payoutLoadError &&
-        payoutMap.has(`${race.placeNo}-${race.raceNo}`)
-      ) {
-        const payoutFallback = payoutMap.get(`${race.placeNo}-${race.raceNo}`);
-        if (payoutFallback?.status === "confirmed") {
+      if (result.status === "missing") {
+        const dailyPayouts = await loadPayoutMap();
+        const payoutFallback = dailyPayouts.get(`${race.placeNo}-${race.raceNo}`);
+        if (!payoutLoadError && payoutFallback?.status === "confirmed") {
           result = {
             hiduke: state.hiduke,
             placeNo: race.placeNo,
@@ -456,13 +546,13 @@ async function collectResults(state) {
             }),
             note: "個別結果ページ取得失敗のため日別払戻一覧で補完"
           };
+        } else if (payoutLoadError) {
+          result.note = result.note || `Failed to load daily pay table: ${payoutLoadError.message}`;
         }
-      } else if (result.status === "missing" && payoutLoadError) {
-        result.note = result.note || `Failed to load daily pay table: ${payoutLoadError.message}`;
       }
 
-      results.push({ race, result });
       console.log(`[race-result] ${race.placeNo}場 ${race.raceNo}R status=${result.status}`);
+      return { race, result };
     } catch (error) {
       const fallback = {
         hiduke: state.hiduke,
@@ -481,10 +571,25 @@ async function collectResults(state) {
         }),
         note: error.message
       };
-      results.push({ race, result: fallback });
       console.error(`[race-result-failed] ${race.placeNo}場 ${race.raceNo}R :: ${error.message}`);
+      return { race, result: fallback };
     }
   }
+
+  async function worker() {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= state.races.length) {
+        return;
+      }
+
+      results.push(await processRace(state.races[currentIndex]));
+    }
+  }
+
+  const workerCount = Math.min(config.resultConcurrency, Math.max(state.races.length, 1));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   return results;
 }
@@ -502,7 +607,7 @@ async function main() {
     return;
   }
 
-  console.log(`[start] hiduke=${state.hiduke} races=${state.races.length} dryRun=${config.dryRun}`);
+  console.log(`[start] hiduke=${state.hiduke} races=${state.races.length} resultConcurrency=${config.resultConcurrency} dryRun=${config.dryRun}`);
 
   if (state.races.length === 0) {
     const messages = await sendSummary(config, [
@@ -513,7 +618,7 @@ async function main() {
     return;
   }
 
-  const results = (await collectResults(state)).map((item) => ({
+  const results = (await collectResults(state, config)).map((item) => ({
     ...item,
     judgement: buildKaimeJudgement(item.race, item.result)
   }));
@@ -530,16 +635,18 @@ async function main() {
     `対象日: ${formatHiduke(state.hiduke)}`,
     `件数: ${state.races.length}レース`,
     `確定 ${counts.confirmed} / 未確定 ${counts.notFinal} / 中止 ${counts.cancelled} / 失敗 ${counts.missing}`,
+    buildSettlementSummaryLine(results),
     buildKaimeHitSummaryLine(results),
     buildKaimeUnavailableSummaryLine(results),
     buildTopPayoutLine(results)
   ].filter(Boolean), blocks);
 
   console.log(`[done] hiduke=${state.hiduke} confirmed=${counts.confirmed} not_final=${counts.notFinal} cancelled=${counts.cancelled} missing=${counts.missing} discordMessages=${messages}`);
-
 }
 
-main().catch((error) => {
-  console.error(`[fatal] ${error.stack || error.message}`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(`[fatal] ${error.stack || error.message}`);
+    process.exitCode = 1;
+  });
+}
