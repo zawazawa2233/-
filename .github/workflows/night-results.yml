@@ -2,7 +2,7 @@ name: Night Kyoteibiyori Results
 
 on:
   schedule:
-    - cron: "0 14 * * *"
+    - cron: "5 14 * * *"
   workflow_dispatch:
     inputs:
       hiduke:
@@ -20,6 +20,7 @@ jobs:
     env:
       PICK_STATE_DIR: artifacts
       RESULT_DEBUG_DIR: artifacts/night-debug
+      RESULT_CONCURRENCY: "6"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -140,6 +141,7 @@ jobs:
           HIDUKE: ${{ env.HIDUKE }}
           PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
           RESULT_DEBUG_DIR: ${{ env.RESULT_DEBUG_DIR }}
+          RESULT_CONCURRENCY: ${{ env.RESULT_CONCURRENCY }}
         run: npm run start:night
 
       - name: Upload night debug artifacts
