@@ -34,6 +34,8 @@ jobs:
         run: |
           if [ -n "${{ github.event.inputs.hiduke }}" ]; then
             echo "HIDUKE=${{ github.event.inputs.hiduke }}" >> "$GITHUB_ENV"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "HIDUKE=$(TZ=Asia/Tokyo date -d '12 hours ago' +%Y%m%d)" >> "$GITHUB_ENV"
           else
             echo "HIDUKE=$(TZ=Asia/Tokyo date +%Y%m%d)" >> "$GITHUB_ENV"
           fi
