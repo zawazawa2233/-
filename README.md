@@ -141,4 +141,6 @@ npm run start:kaime
 - 毎日 `23:05 JST` の定期実行
 - `workflow_dispatch` による手動実行
 
+夜ワークフローは定期実行時、GitHub Actions の起動遅延で日付をまたいでも前日の結果を集計できるよう、JST の実行時刻から 12 時間戻した日付を `HIDUKE` として使います。手動実行では入力した `hiduke` を優先し、未入力の場合は JST の今日を使います。
+
 夜ワークフローは朝の artifact を取得したあとで `npm run start:night` を実行します。artifact が見つからない場合は `PICK_STATE_ONLY=1` で pick state を再生成してから夜通知を実行します。再生成した state に買い目候補を載せられない場合でもジョブは落とさず、夜通知ではそのレースを `買い目判定不可` として扱います。
