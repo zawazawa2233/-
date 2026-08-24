@@ -1,0 +1,100 @@
+name: EV Shadow Daily Results
+
+on:
+  schedule:
+    - cron: "30 22 * * *"
+  workflow_dispatch:
+    inputs:
+      through:
+        description: "Last settled YYYYMMDD date (default: yesterday in JST)"
+        required: false
+        type: string
+      test_notification:
+        description: "Send a connection test to the dedicated Discord room"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  audit-and-notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve audit date
+        run: |
+          if [ "${{ github.event.inputs.test_notification }}" = "true" ]; then
+            echo "SHADOW_TEST=true" >> "$GITHUB_ENV"
+          else
+            echo "SHADOW_TEST=false" >> "$GITHUB_ENV"
+          fi
+          if [ -n "${{ github.event.inputs.through }}" ]; then
+            THROUGH="${{ github.event.inputs.through }}"
+          else
+            THROUGH="$(TZ=Asia/Tokyo date -d 'yesterday' +%Y%m%d)"
+          fi
+          echo "THROUGH=$THROUGH" >> "$GITHUB_ENV"
+          if [ "$THROUGH" -lt 20260825 ]; then
+            echo "SHADOW_ACTIVE=false" >> "$GITHUB_ENV"
+          else
+            echo "SHADOW_ACTIVE=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Test dedicated Discord room
+        if: env.SHADOW_TEST == 'true'
+        env:
+          SHADOW_DISCORD_WEBHOOK_URL: ${{ secrets.SHADOW_DISCORD_WEBHOOK_URL }}
+          SHADOW_TEST: "1"
+        run: node shadow_ev_notify.js
+
+      - name: Restore shadow cache
+        if: env.SHADOW_ACTIVE == 'true' && env.SHADOW_TEST != 'true'
+        uses: actions/cache@v4
+        with:
+          path: .shadow-cache
+          key: ${{ runner.os }}-shadow-v1-${{ env.THROUGH }}
+          restore-keys: |
+            ${{ runner.os }}-shadow-v1-
+
+      - name: Install analysis dependency
+        if: env.SHADOW_ACTIVE == 'true' && env.SHADOW_TEST != 'true'
+        run: python -m pip install numpy
+
+      - name: Audit Champion v1
+        if: env.SHADOW_ACTIVE == 'true' && env.SHADOW_TEST != 'true'
+        run: |
+          python scripts/audit-trifecta-ev-shadow.py \
+            --through "$THROUGH" \
+            --archive-dir .shadow-cache/archives \
+            --snapshot-dir .shadow-cache/snapshots
+
+      - name: Notify dedicated Discord room
+        if: env.SHADOW_ACTIVE == 'true' && env.SHADOW_TEST != 'true'
+        env:
+          SHADOW_DISCORD_WEBHOOK_URL: ${{ secrets.SHADOW_DISCORD_WEBHOOK_URL }}
+          SHADOW_REPORT: artifacts/trifecta-ev-shadow-audit-${{ env.THROUGH }}.json
+          SHADOW_STATE_FILE: .shadow-cache/last-summary.json
+          SHADOW_THROUGH: ${{ env.THROUGH }}
+        run: node shadow_ev_notify.js
+
+      - name: Upload shadow audit
+        if: always() && env.SHADOW_ACTIVE == 'true' && env.SHADOW_TEST != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-ev-audit-${{ env.THROUGH }}
+          path: artifacts/trifecta-ev-shadow-audit-${{ env.THROUGH }}.json
+          if-no-files-found: warn
+          retention-days: 90

@@ -1,0 +1,76 @@
+{
+  "protocol_id": "trifecta-ev-shadow-champion-v1",
+  "status": "active-shadow-only",
+  "registered_at_jst": "2026-08-24",
+  "forward_period": {
+    "start": "2026-08-25",
+    "end": "2027-08-24"
+  },
+  "production_model_policy": "No changes. This experiment is isolated from production predictors and notifications.",
+  "data_contract": {
+    "odds": "BoatraceCSV data/previews/od3 captured before the deadline",
+    "exhibition": [
+      "BoatraceCSV data/previews/tkz",
+      "BoatraceCSV data/previews/stt",
+      "BoatraceCSV data/previews/sui"
+    ],
+    "settlement": "Official result archive cross-checked against BoatraceCSV payouts",
+    "unit_stake_yen": 100
+  },
+  "champion": {
+    "version": "v1",
+    "implementation": "scripts/backtest-prerace-exhibition-ev.py",
+    "implementation_sha256": {
+      "scripts/backtest-trifecta-ev.py": "a1a2a344bebd417829e251b3a024b27343d4b83c01647aeba2df89b82cbea6a5",
+      "scripts/backtest-prerace-trifecta-ev.py": "bb1240fa211da48c0f32e2da4223482779788e2700cbfb0d4a4984855caea04e",
+      "scripts/backtest-prerace-exhibition-ev.py": "1084deb4b6d25642d3d095a0497dbd57fb81d16722cd8dfa57dcfa0ea5f9529e"
+    },
+    "probability_blend": {
+      "market": 0.70,
+      "model": 0.30
+    },
+    "ticket_rule": {
+      "minimum_estimated_ev": 1.10,
+      "maximum_tickets_per_race": 1,
+      "order": "estimated_ev_desc"
+    },
+    "frozen_training_period": [
+      "2026-05-01",
+      "2026-06-30"
+    ],
+    "frozen_temperature_calibration_period": [
+      "2026-07-01",
+      "2026-07-18"
+    ]
+  },
+  "checkpoints": {
+    "scheduled_ticket_counts": [
+      10000,
+      20000
+    ],
+    "final_date": "2027-08-24",
+    "early_stop": "Stop if a pre-scheduled day-block bootstrap 95% upper bound is below 100% ROI.",
+    "pass": "At final date, ROI must exceed 100% and the day-block bootstrap 95% lower bound must also exceed 100%.",
+    "next_stage": "A pass creates a second untouched validation year; it does not authorize real-money betting."
+  },
+  "challenger_policy": {
+    "allowed": true,
+    "rule": "Every improvement gets a new version and starts scoring only after its registration date.",
+    "promotion": "Promote only after an untouched comparison window; never rewrite Champion v1 history.",
+    "examples": [
+      "odds movement or final-odds slippage correction",
+      "venue-specific calibration with minimum sample sizes",
+      "uncertainty-aware EV shrinkage",
+      "race skip filters based on calibration reliability"
+    ]
+  },
+  "discovery_result_not_forward_evidence": {
+    "period": [
+      "2026-07-19",
+      "2026-08-22"
+    ],
+    "tickets": 3471,
+    "roi_percent": 95.85422068568136,
+    "roi_without_largest_hit_percent": 82.05416306539902
+  }
+}
