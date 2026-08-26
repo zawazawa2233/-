@@ -73,7 +73,6 @@ jobs:
         run: |
           python scripts/audit-trifecta-ev-shadow.py \
             --through "$THROUGH" \
-            --archive-dir .shadow-cache/archives \
             --snapshot-dir .shadow-cache/snapshots
 
       - name: Notify dedicated Discord room

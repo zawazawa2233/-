@@ -14,13 +14,22 @@
       "BoatraceCSV data/previews/stt",
       "BoatraceCSV data/previews/sui"
     ],
-    "settlement": "Official result archive cross-checked against BoatraceCSV payouts",
+    "race_card": "BoatraceCSV data/programs/race_cards",
+    "settlement": "BoatraceCSV realtime finish order cross-checked against BoatraceCSV payouts; both originate from official Boatcast result sources",
     "unit_stake_yen": 100
   },
   "champion": {
     "version": "v1",
     "implementation": "scripts/backtest-prerace-exhibition-ev.py",
     "implementation_sha256": {
+      "scripts/backtest-trifecta-ev.py": "a1a2a344bebd417829e251b3a024b27343d4b83c01647aeba2df89b82cbea6a5",
+      "scripts/backtest-prerace-trifecta-ev.py": "bb1240fa211da48c0f32e2da4223482779788e2700cbfb0d4a4984855caea04e",
+      "scripts/backtest-prerace-exhibition-ev.py": "1084deb4b6d25642d3d095a0497dbd57fb81d16722cd8dfa57dcfa0ea5f9529e"
+    },
+    "operational_scorer": "scripts/score-trifecta-ev-shadow.py",
+    "operational_sha256": {
+      "experiments/trifecta-ev-shadow/champion-v1-model.json": "64e36cb7b9b6bb30d0263bb8ee9d8012ddf582847081aea5382aeaf00de00ced",
+      "scripts/score-trifecta-ev-shadow.py": "292bf65f0bb1e1402c653c2631078b70d8e69049542e6c83dcafba3b875ae27f",
       "scripts/backtest-trifecta-ev.py": "a1a2a344bebd417829e251b3a024b27343d4b83c01647aeba2df89b82cbea6a5",
       "scripts/backtest-prerace-trifecta-ev.py": "bb1240fa211da48c0f32e2da4223482779788e2700cbfb0d4a4984855caea04e",
       "scripts/backtest-prerace-exhibition-ev.py": "1084deb4b6d25642d3d095a0497dbd57fb81d16722cd8dfa57dcfa0ea5f9529e"
@@ -72,5 +81,6 @@
     "tickets": 3471,
     "roi_percent": 95.85422068568136,
     "roi_without_largest_hit_percent": 82.05416306539902
-  }
+  },
+  "operational_note_2026_08_27": "The first scheduled run exposed that GitHub-hosted runners could not reliably build the training archive. Daily operation now loads the already-frozen Champion v1 parameters and scores public timestamped CSVs only. On 2026-08-25 the old archive path and the public path both had zero hits; the public path covered more races (144 vs 121 scored), so no favorable outcome was selected."
 }

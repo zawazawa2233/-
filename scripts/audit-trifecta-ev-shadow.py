@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch immutable inputs and audit the frozen Champion v1 shadow rule."""
+"""Fetch public immutable inputs and audit frozen Champion v1 parameters."""
 
 import argparse
 import hashlib
@@ -25,7 +25,6 @@ def main():
         default=(datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(days=1)).strftime("%Y%m%d"),
         help="Last settled YYYYMMDD date to include; defaults to yesterday in JST.",
     )
-    parser.add_argument("--archive-dir", type=Path, default=Path("/tmp/boatrace-ev-backtest/archives"))
     parser.add_argument("--snapshot-dir", type=Path, default=Path("/tmp/boatrace-prerace"))
     args = parser.parse_args()
     if not args.through.isdigit() or len(args.through) != 8:
@@ -33,10 +32,10 @@ def main():
 
     protocol_path = repo / "experiments/trifecta-ev-shadow/protocol-v1.json"
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
-    for relative, expected in protocol["champion"]["implementation_sha256"].items():
+    for relative, expected in protocol["champion"]["operational_sha256"].items():
         actual = hashlib.sha256((repo / relative).read_bytes()).hexdigest()
         if actual != expected:
-            parser.error(f"Champion v1 implementation changed: {relative}; create a challenger instead")
+            parser.error(f"Champion v1 operational artifact changed: {relative}")
     start = protocol["forward_period"]["start"].replace("-", "")
     final = protocol["forward_period"]["end"].replace("-", "")
     if args.through < start:
@@ -47,29 +46,25 @@ def main():
     env = os.environ.copy()
     env.update(
         {
-            "DATE_FROM": "20260501",
+            "DATE_FROM": start,
             "DATE_TO": args.through,
-            "ARCHIVE_DIR": str(args.archive_dir),
             "SNAPSHOT_DIR": str(args.snapshot_dir),
         }
     )
-    run(["node", "scripts/download-boatrace-archives.js"], env, repo)
     run(["node", "scripts/download-boatracecsv-snapshots.js"], env, repo)
     output = repo / f"artifacts/trifecta-ev-shadow-audit-{args.through}.json"
     run(
         [
             sys.executable,
-            "scripts/backtest-prerace-exhibition-ev.py",
-            "--archive-dir",
-            str(args.archive_dir),
+            "scripts/score-trifecta-ev-shadow.py",
             "--snapshot-dir",
             str(args.snapshot_dir),
-            "--evaluation-end",
-            args.through,
-            "--forward-start",
+            "--model",
+            "experiments/trifecta-ev-shadow/champion-v1-model.json",
+            "--start",
             start,
-            "--fixed-alpha",
-            str(protocol["champion"]["probability_blend"]["model"]),
+            "--through",
+            args.through,
             "--output",
             str(output),
         ],
@@ -88,7 +83,7 @@ def main():
             {
                 "protocol": protocol["protocol_id"],
                 "through": args.through,
-                "forward_races": report["counts"]["forward"],
+                "forward_races": report["counts"]["scored_races"],
                 "tickets": rule["tickets"],
                 "hits": rule["hits"],
                 "roi": rule["roi"],

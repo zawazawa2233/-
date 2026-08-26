@@ -2,6 +2,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const SOURCES = [
+  ["programs/race_cards", "race_cards", "20260825"],
   ["previews/od3", "od3", "20260719"],
   ["previews/tkz", "tkz", "20260501"],
   ["previews/stt", "stt", "20260501"],
