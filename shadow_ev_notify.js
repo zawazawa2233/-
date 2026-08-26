@@ -59,6 +59,26 @@ async function main() {
   const dryRun = process.env.DRY_RUN === "1";
   const webhookUrl = process.env.SHADOW_DISCORD_WEBHOOK_URL?.trim() || "";
   if (!webhookUrl && !dryRun) throw new Error("SHADOW_DISCORD_WEBHOOK_URL is required unless DRY_RUN=1");
+  if (process.env.SHADOW_FAILURE === "1") {
+    const through = (process.env.SHADOW_THROUGH || "").trim();
+    await deliverDiscordPayloads({
+      webhookUrl,
+      dryRun,
+      payloads: [
+        {
+          username: "EVシャドー検証",
+          embeds: [
+            {
+              title: `⚠️ EVシャドー集計失敗｜${formatDate(through) || "日付不明"}`,
+              description: "本日の結果集計に失敗しました。実購入は行っていません。GitHub Actionsの `EV Shadow Daily Results` を確認してください。",
+              color: 0xe74c3c
+            }
+          ]
+        }
+      ]
+    });
+    return;
+  }
   if (process.env.SHADOW_TEST === "1") {
     await deliverDiscordPayloads({
       webhookUrl,

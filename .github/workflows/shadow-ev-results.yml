@@ -84,6 +84,14 @@ jobs:
           SHADOW_THROUGH: ${{ env.THROUGH }}
         run: node shadow_ev_notify.js
 
+      - name: Notify Discord when the audit fails
+        if: failure() && env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
+        env:
+          SHADOW_DISCORD_WEBHOOK_URL: ${{ secrets.SHADOW_DISCORD_WEBHOOK_URL }}
+          SHADOW_FAILURE: "1"
+          SHADOW_THROUGH: ${{ env.THROUGH }}
+        run: node shadow_ev_notify.js
+
       - name: Upload shadow audit
         if: always() && env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
         uses: actions/upload-artifact@v4
