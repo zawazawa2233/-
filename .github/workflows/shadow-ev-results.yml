@@ -1,11 +1,6 @@
 name: EV Shadow Daily Results
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/shadow-ev-results.yml"
   schedule:
     - cron: "30 22 * * *"
   workflow_dispatch:
@@ -45,9 +40,7 @@ jobs:
 
       - name: Resolve audit date
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            THROUGH="20260826"
-          elif [ -n "${{ github.event.inputs.through }}" ]; then
+          if [ -n "${{ github.event.inputs.through }}" ]; then
             THROUGH="${{ github.event.inputs.through }}"
           else
             THROUGH="$(TZ=Asia/Tokyo date -d 'yesterday' +%Y%m%d)"
