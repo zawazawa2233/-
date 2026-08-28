@@ -1,0 +1,31 @@
+{
+  "protocol_id": "trifecta-model-top1-shadow-v1",
+  "status": "active-shadow-only",
+  "registered_at_jst": "2026-08-28",
+  "forward_period": {
+    "start": "2026-08-29"
+  },
+  "production_model_policy": "No changes. This challenger is isolated from production picks and Champion v1 settlement.",
+  "model": {
+    "source": "experiments/trifecta-ev-shadow/champion-v1-model.json",
+    "sha256": "64e36cb7b9b6bb30d0263bb8ee9d8012ddf582847081aea5382aeaf00de00ced"
+  },
+  "race_grade": {
+    "definition": "Normalized market probability mass of the seven most popular trifectas at the captured pre-deadline odds.",
+    "s_minimum": 0.511011362094197,
+    "a_minimum": 0.42921101923306093
+  },
+  "ticket_rule": {
+    "tickets_per_race": 1,
+    "selection": "Highest frozen-model probability among all 120 trifecta combinations.",
+    "s_label": "勝負本線",
+    "a_label": "参考本線",
+    "unit_stake_yen": 100
+  },
+  "notification": {
+    "room_secret": "SHADOW_DISCORD_WEBHOOK_URL",
+    "deadline_lookahead_minutes": 12,
+    "past_deadline_grace_minutes": 0
+  },
+  "evidence_note": "Historical discovery metrics are not forward evidence. S had 18.18% hit rate and 102.39% ROI over 88 races from 2026-08-21 through 2026-08-27; all S+A races had 13.28% hit rate and 85.20% ROI over 271 races."
+}

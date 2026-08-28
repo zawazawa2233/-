@@ -1,5 +1,11 @@
 # Kyoteibiyori Daily Pick Bot
 
+## 三連単1点シャドー
+
+既存の朝予想とChampion v1を変更せず、締切前の公開オッズと展示データが揃ったレースを5分間隔で確認する独立ワークフローを用意しています。市場上位7点の確率集中度からS/Aを判定し、凍結モデルが三連単120通りの中で最も高い確率を付けた1点だけを専用Discordへ送ります。Sは `勝負本線`、Aは `参考本線` と表示します。実購入は行いません。
+
+ワークフローは [`shadow-one-pick.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/shadow-one-pick.yml)、固定条件は [`protocol-v1.json`](/Users/atsuatsu/Desktop/ボート/experiments/trifecta-one-pick-shadow/protocol-v1.json) にあります。2026-08-29以降を前向き検証期間とし、過去成績による条件の書き換えはしません。
+
 朝は `kyoteibiyori.com` の `race_shusso.php` を Playwright で描画し、`枠別情報` 内の `直近6ヶ月` の枠別情報を DOM から取得して、`1号艇が逃げなさそう` な条件一致レースを Discord Webhook に送信します。条件一致レースがある場合は、続けて決まり手ルールベースの買い目案も Discord に送信します。
 
 展示後は、朝に保存した `picked-races-YYYYMMDD.json` をもとに 5 分おきで巡回し、発走 15 分以内かつ未送信のレースだけを対象に再判定します。主軸頭は朝の最上位理由を基本維持しつつ、展示後データから展開頭を最大 2 艇まで追加します。展開頭は展示タイム、展示ST、展示進入、今節順位、モーター2連対率、枠別連対率、節間ST順位を見て加点します。三連単は固定で 24 点にせず、目標合成オッズを下回らない範囲で優先度順に採用します。目標合成オッズは既定で 8.5 倍、上限は 24 点です。送信結果は同じ `picked-races-YYYYMMDD.json` に保存し直します。

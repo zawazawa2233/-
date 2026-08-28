@@ -1,0 +1,118 @@
+name: Trifecta One Pick Shadow
+
+on:
+  schedule:
+    # 08:00-20:59 JST. The UTC range crosses midnight.
+    - cron: "*/5 23 * * *"
+    - cron: "*/5 0-11 * * *"
+  workflow_dispatch:
+    inputs:
+      hiduke:
+        description: "YYYYMMDD (default: today in JST)"
+        required: false
+        type: string
+      notify_all:
+        description: "Notify every currently scored S/A race, ignoring the deadline window"
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: "Build and print Discord payloads without sending"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: trifecta-one-pick-shadow-main
+  cancel-in-progress: false
+
+jobs:
+  score-and-notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve target date
+        run: |
+          if [ -n "${{ github.event.inputs.hiduke }}" ]; then
+            HIDUKE="${{ github.event.inputs.hiduke }}"
+          else
+            HIDUKE="$(TZ=Asia/Tokyo date +%Y%m%d)"
+          fi
+          echo "HIDUKE=$HIDUKE" >> "$GITHUB_ENV"
+          if [ "$HIDUKE" -lt 20260829 ]; then
+            echo "SHADOW_ACTIVE=false" >> "$GITHUB_ENV"
+          else
+            echo "SHADOW_ACTIVE=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Restore one-pick notification state
+        if: env.SHADOW_ACTIVE == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: .shadow-one-pick-cache
+          key: ${{ runner.os }}-one-pick-${{ env.HIDUKE }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-one-pick-${{ env.HIDUKE }}-
+
+      - name: Prepare state directory
+        if: env.SHADOW_ACTIVE == 'true'
+        run: mkdir -p .shadow-one-pick-cache artifacts
+
+      - name: Install scoring dependency
+        if: env.SHADOW_ACTIVE == 'true'
+        run: python -m pip install numpy
+
+      - name: Fetch current public inputs
+        if: env.SHADOW_ACTIVE == 'true'
+        env:
+          HIDUKE: ${{ env.HIDUKE }}
+          SNAPSHOT_DIR: .shadow-one-pick-inputs
+        run: node scripts/fetch-trifecta-one-pick-inputs.js
+
+      - name: Score S/A model-top1 tickets
+        if: env.SHADOW_ACTIVE == 'true'
+        run: |
+          python scripts/score-trifecta-one-pick-shadow.py \
+            --hiduke "$HIDUKE" \
+            --snapshot-dir .shadow-one-pick-inputs \
+            --output "artifacts/trifecta-one-pick-${HIDUKE}.json"
+
+      - name: Notify dedicated Discord room
+        if: env.SHADOW_ACTIVE == 'true'
+        env:
+          SHADOW_DISCORD_WEBHOOK_URL: ${{ secrets.SHADOW_DISCORD_WEBHOOK_URL }}
+          SHADOW_ONE_PICK_REPORT: artifacts/trifecta-one-pick-${{ env.HIDUKE }}.json
+          SHADOW_ONE_PICK_STATE: .shadow-one-pick-cache/state-${{ env.HIDUKE }}.json
+          SHADOW_NOTIFY_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.notify_all && '1' || '0' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: node shadow_one_pick_notify.js
+
+      - name: Save one-pick notification state
+        if: always() && env.SHADOW_ACTIVE == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .shadow-one-pick-cache
+          key: ${{ runner.os }}-one-pick-${{ env.HIDUKE }}-${{ github.run_id }}
+
+      - name: Upload manual scoring report
+        if: github.event_name == 'workflow_dispatch' && env.SHADOW_ACTIVE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: trifecta-one-pick-${{ env.HIDUKE }}-${{ github.run_id }}
+          path: artifacts/trifecta-one-pick-${{ env.HIDUKE }}.json
+          if-no-files-found: warn
+          retention-days: 7
