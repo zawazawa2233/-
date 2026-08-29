@@ -5,6 +5,15 @@ on:
     # 08:00-20:59 JST. The UTC range crosses midnight.
     - cron: "*/5 23 * * *"
     - cron: "*/5 0-11 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/shadow-one-pick.yml"
+      - "experiments/trifecta-one-pick-shadow/protocol-v1.json"
+      - "scripts/fetch-trifecta-one-pick-inputs.js"
+      - "scripts/score-trifecta-one-pick-shadow.py"
+      - "shadow_one_pick_notify.js"
   workflow_dispatch:
     inputs:
       hiduke:

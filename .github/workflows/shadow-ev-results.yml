@@ -2,7 +2,18 @@ name: EV Shadow Daily Results
 
 on:
   schedule:
-    - cron: "30 22 * * *"
+    # GitHub scheduled runs can be delayed or dropped.  Retry through late
+    # morning; the persisted `through` state keeps delivery idempotent.
+    - cron: "22,37,52 22 * * *"
+    - cron: "7,22,37,52 23,0,1,2 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/shadow-ev-results.yml"
+      - "shadow_ev_notify.js"
+      - "scripts/audit-trifecta-ev-shadow.py"
+      - "scripts/score-trifecta-ev-shadow.py"
   workflow_dispatch:
     inputs:
       through:
@@ -68,19 +79,39 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-shadow-v1-
 
-      - name: Install analysis dependency
+      - name: Check prior delivery
         if: env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
+        run: |
+          NOTIFIED_THROUGH="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('.shadow-cache/last-summary.json')
+          try:
+              print(json.loads(path.read_text()).get('through', ''))
+          except Exception:
+              print('')
+          PY
+          )"
+          if [ "$NOTIFIED_THROUGH" = "$THROUGH" ]; then
+            echo "SHADOW_ALREADY_NOTIFIED=true" >> "$GITHUB_ENV"
+            echo "Already notified through $THROUGH; retry exits cleanly."
+          else
+            echo "SHADOW_ALREADY_NOTIFIED=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install analysis dependency
+        if: env.SHADOW_ACTIVE == 'true' && env.SHADOW_ALREADY_NOTIFIED != 'true' && inputs.test_notification != true
         run: python -m pip install numpy
 
       - name: Audit Champion v1
-        if: env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
+        if: env.SHADOW_ACTIVE == 'true' && env.SHADOW_ALREADY_NOTIFIED != 'true' && inputs.test_notification != true
         run: |
           python scripts/audit-trifecta-ev-shadow.py \
             --through "$THROUGH" \
             --snapshot-dir .shadow-cache/snapshots
 
       - name: Notify dedicated Discord room
-        if: env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
+        if: env.SHADOW_ACTIVE == 'true' && env.SHADOW_ALREADY_NOTIFIED != 'true' && inputs.test_notification != true
         env:
           SHADOW_DISCORD_WEBHOOK_URL: ${{ secrets.SHADOW_DISCORD_WEBHOOK_URL }}
           SHADOW_REPORT: artifacts/trifecta-ev-shadow-audit-${{ env.THROUGH }}.json
@@ -89,7 +120,7 @@ jobs:
         run: node shadow_ev_notify.js
 
       - name: Notify Discord when the audit fails
-        if: failure() && env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
+        if: failure() && env.SHADOW_ACTIVE == 'true' && env.SHADOW_ALREADY_NOTIFIED != 'true' && inputs.test_notification != true
         env:
           SHADOW_DISCORD_WEBHOOK_URL: ${{ secrets.SHADOW_DISCORD_WEBHOOK_URL }}
           SHADOW_FAILURE: "1"
@@ -97,7 +128,7 @@ jobs:
         run: node shadow_ev_notify.js
 
       - name: Upload shadow audit
-        if: always() && env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
+        if: always() && env.SHADOW_ACTIVE == 'true' && env.SHADOW_ALREADY_NOTIFIED != 'true' && inputs.test_notification != true
         uses: actions/upload-artifact@v4
         with:
           name: shadow-ev-audit-${{ env.THROUGH }}
