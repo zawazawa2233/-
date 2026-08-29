@@ -64,7 +64,7 @@
 4. Name に `DISCORD_WEBHOOK_URL` を設定します。
 5. Value に Discord でコピーした Webhook URL を設定します。
 
-`/.github/workflows/daily.yml` は毎日 `07:00 JST` に実行されます。GitHub Actions の cron は UTC なので、設定値は `0 22 * * *` です。
+`/.github/workflows/daily.yml` は毎日 `06:53 JST` に実行されます。毎時0分の混雑による大幅な起動遅延を避けるため、GitHub Actions の cron は `53 21 * * *`（UTC）です。
 
 ## ローカル実行
 
@@ -130,7 +130,7 @@ npm run start:kaime
 
 朝ワークフロー [`daily.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/daily.yml) は次のタイミングで実行できます。
 
-- 毎日 `07:00 JST` の定期実行
+- 毎日 `06:53 JST` の定期実行
 - `workflow_dispatch` による手動実行
 
 実行時には Playwright Chromium をインストールしたあとで `npm start` を実行し、`picked-races-YYYYMMDD.json` を artifact として 2 日保持します。
