@@ -2,9 +2,15 @@ name: Trifecta One Pick Shadow
 
 on:
   schedule:
-    # 08:00-20:59 JST. The UTC range crosses midnight.
-    - cron: "*/5 23 * * *"
-    - cron: "*/5 0-11 * * *"
+    # 08:02-20:57 JST. Offset from the busiest round-number cron minute.
+    - cron: "2-57/5 23 * * *"
+    - cron: "2-57/5 0-11 * * *"
+  # This is a second trigger path when GitHub delays or drops a scheduled run.
+  workflow_run:
+    workflows:
+      - Final Kyoteibiyori Judge
+    types:
+      - completed
   push:
     branches:
       - main
@@ -12,6 +18,7 @@ on:
       - ".github/workflows/shadow-one-pick.yml"
       - "experiments/trifecta-one-pick-shadow/protocol-v1.json"
       - "scripts/fetch-trifecta-one-pick-inputs.js"
+      - "scripts/download-boatrace-archives.js"
       - "scripts/score-trifecta-one-pick-shadow.py"
       - "shadow_one_pick_notify.js"
   workflow_dispatch:
@@ -92,12 +99,21 @@ jobs:
           SNAPSHOT_DIR: .shadow-one-pick-inputs
         run: node scripts/fetch-trifecta-one-pick-inputs.js
 
+      - name: Fetch official program fallback
+        if: env.SHADOW_ACTIVE == 'true'
+        env:
+          DATE_FROM: ${{ env.HIDUKE }}
+          DATE_TO: ${{ env.HIDUKE }}
+          ARCHIVE_DIR: .shadow-one-pick-archives
+        run: node scripts/download-boatrace-archives.js
+
       - name: Score S/A model-top1 tickets
         if: env.SHADOW_ACTIVE == 'true'
         run: |
           python scripts/score-trifecta-one-pick-shadow.py \
             --hiduke "$HIDUKE" \
             --snapshot-dir .shadow-one-pick-inputs \
+            --archive-dir .shadow-one-pick-archives \
             --output "artifacts/trifecta-one-pick-${HIDUKE}.json"
 
       - name: Notify dedicated Discord room

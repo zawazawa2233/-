@@ -36,17 +36,18 @@ def as_int(value):
         return None
 
 
-def empty_report(hiduke, protocol_id, reason):
+def empty_report(hiduke, protocol_id, reason, race_card_source="none"):
     return {
         "protocol_id": protocol_id,
         "hiduke": hiduke,
+        "race_card_source": race_card_source,
         "counts": {"race_cards": 0, "feature_ready": 0, "odds_ready": 0, "selected": 0},
         "selections": [],
         "note": reason,
     }
 
 
-def load_current_races(helper, snapshot_dir, hiduke):
+def load_csv_races(helper, snapshot_dir, hiduke):
     cards = helper.read_csv_tree(snapshot_dir / "race_cards")
     previews = helper.read_csv_tree(snapshot_dir / "tkz")
     starts = helper.read_csv_tree(snapshot_dir / "stt")
@@ -123,10 +124,38 @@ def load_current_races(helper, snapshot_dir, hiduke):
     return races
 
 
+def load_official_program(core, archive_dir, hiduke):
+    """Load the official B program when the live race-card CSV is delayed."""
+    short = hiduke[2:]
+    archive = archive_dir / "B" / f"b{short}.lzh"
+    if not archive.exists():
+        return []
+    try:
+        programs = core.parse_program(
+            core.read_archive(archive, f"B{short}.TXT"), hiduke
+        )
+    except Exception as error:
+        print(f"[program-fallback] {error}")
+        return []
+    races = []
+    for race in programs.values():
+        if len(race["boats"]) != 6:
+            continue
+        race["boats"].sort(key=lambda boat: boat["lane"])
+        if [boat["lane"] for boat in race["boats"]] != list(range(1, 7)):
+            continue
+        race["combination"] = "1-2-3"
+        race["payout"] = 0
+        races.append(race)
+    races.sort(key=lambda race: (race["placeNo"], race["raceNo"]))
+    return races
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hiduke", required=True)
     parser.add_argument("--snapshot-dir", type=Path, default=Path(".shadow-one-pick-inputs"))
+    parser.add_argument("--archive-dir", type=Path, default=Path(".shadow-one-pick-archives"))
     parser.add_argument("--protocol", type=Path, default=Path("experiments/trifecta-one-pick-shadow/protocol-v1.json"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -146,9 +175,17 @@ def main():
     helper = load_module("one_pick_helper", script_dir / "backtest-prerace-trifecta-ev.py")
     exhibition = load_module("one_pick_exhibition", script_dir / "backtest-prerace-exhibition-ev.py")
 
-    raw_races = load_current_races(helper, args.snapshot_dir, args.hiduke)
+    raw_races = load_csv_races(helper, args.snapshot_dir, args.hiduke)
+    race_card_source = "boatracecsv"
     if not raw_races:
-        report = empty_report(args.hiduke, protocol["protocol_id"], "No current race cards with preview weights are available yet.")
+        raw_races = load_official_program(core, args.archive_dir, args.hiduke)
+        race_card_source = "official_b_archive" if raw_races else "none"
+    if not raw_races:
+        report = empty_report(
+            args.hiduke,
+            protocol["protocol_id"],
+            "Neither live race cards nor the official B program are available yet.",
+        )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False))
@@ -209,6 +246,7 @@ def main():
     report = {
         "protocol_id": protocol["protocol_id"],
         "hiduke": args.hiduke,
+        "race_card_source": race_card_source,
         "model_id": frozen["model_id"],
         "counts": {
             "race_cards": len(raw_races),
