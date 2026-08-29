@@ -4,7 +4,7 @@ on:
   schedule:
     # GitHub scheduled runs can be delayed or dropped.  Retry through late
     # morning; the persisted `through` state keeps delivery idempotent.
-    - cron: "22,37,52 22 * * *"
+    - cron: "30,37,52 22 * * *"
     - cron: "7,22,37,52 23,0,1,2 * * *"
   push:
     branches:
