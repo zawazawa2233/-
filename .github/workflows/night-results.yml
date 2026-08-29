@@ -84,15 +84,13 @@ jobs:
               }
             } else {
               core.info(`Searching artifact: ${targetName}`);
-              const artifacts = await github.paginate(
-                github.rest.actions.listArtifactsForRepo,
-                {
-                  owner,
-                  repo,
-                  per_page: 100
-                },
-                (response) => response.data.artifacts
-              );
+              const response = await github.rest.actions.listArtifactsForRepo({
+                owner,
+                repo,
+                name: targetName,
+                per_page: 100
+              });
+              const artifacts = response.data.artifacts;
 
               match = artifacts
                 .filter((artifact) => artifact && artifact.name === targetName && !artifact.expired)
