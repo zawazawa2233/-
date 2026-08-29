@@ -144,7 +144,7 @@ npm run start:kaime
 
 夜ワークフロー [`night-results.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/night-results.yml) は次のタイミングで実行できます。
 
-- 毎日 `23:05 JST` の定期実行
+- 毎日 `22:53 JST` の定期実行
 - `workflow_dispatch` による手動実行
 
 夜ワークフローは定期実行時、GitHub Actions の起動遅延で日付をまたいでも前日の結果を集計できるよう、JST の実行時刻から 12 時間戻した日付を `HIDUKE` として使います。手動実行では入力した `hiduke` を優先し、未入力の場合は JST の今日を使います。
