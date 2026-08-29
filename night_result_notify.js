@@ -53,6 +53,7 @@ function loadConfig() {
     webhookUrl,
     hiduke,
     dryRun,
+    titlePrefix: process.env.RESULT_TITLE_PREFIX?.trim() || "",
     resultConcurrency: parseEnvInt(process.env.RESULT_CONCURRENCY, "RESULT_CONCURRENCY", 6, 1)
   };
 }
@@ -467,9 +468,10 @@ export function buildSettlementSummaryLine(results) {
 }
 
 async function sendSummary(config, summaryLines, blocks = []) {
+  const titlePrefix = config.titlePrefix ? `${config.titlePrefix} ` : "";
   const payloads = buildChunkedDiscordPayloads({
-    baseTitle: "kyoteibiyori ピックアップレース結果",
-    content: "ピックアップレース結果",
+    baseTitle: `${titlePrefix}kyoteibiyori ピックアップレース結果`,
+    content: `${titlePrefix}ピックアップレース結果`,
     summary: summaryLines.join("\n"),
     blocks,
     color: 5763719
