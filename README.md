@@ -144,9 +144,9 @@ npm run start:kaime
 
 夜ワークフロー [`night-results.yml`](/Users/atsuatsu/Desktop/ボート/.github/workflows/night-results.yml) は次のタイミングで実行できます。
 
-- 毎日 `22:53 JST` の定期実行
+- 毎日 `22:53 JST` の定期実行と、`23:17`・`23:41 JST` の予備実行
 - `workflow_dispatch` による手動実行
 
-夜ワークフローは定期実行時、GitHub Actions の起動遅延で日付をまたいでも前日の結果を集計できるよう、JST の実行時刻から 12 時間戻した日付を `HIDUKE` として使います。手動実行では入力した `hiduke` を優先し、未入力の場合は JST の今日を使います。
+夜ワークフローは定期実行時、GitHub Actions の起動遅延で日付をまたいでも前日の結果を集計できるよう、JST の実行時刻から 12 時間戻した日付を `HIDUKE` として使います。手動実行では入力した `hiduke` を優先し、未入力の場合は JST の今日を使います。\n\n定期実行で通知に成功すると `night-results-sent-YYYYMMDD` artifact を3日間保持します。予備実行や大幅に遅延した実行はこの印を確認し、同日のDiscord結果通知を重複送信しません。手動実行は再送用途のため、この重複防止を適用しません。
 
 夜ワークフローは朝の artifact を取得したあとで `npm run start:night` を実行します。artifact が見つからない場合は `PICK_STATE_ONLY=1` で pick state を再生成してから夜通知を実行します。再生成した state に買い目候補を載せられない場合でもジョブは落とさず、夜通知ではそのレースを `買い目判定不可` として扱います。
