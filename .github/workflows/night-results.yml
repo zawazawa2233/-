@@ -3,6 +3,8 @@ name: Night Kyoteibiyori Results
 on:
   schedule:
     - cron: "53 13 * * *"
+    - cron: "17 14 * * *"
+    - cron: "41 14 * * *"
   workflow_dispatch:
     inputs:
       hiduke:
@@ -13,6 +15,10 @@ on:
         description: "Daily workflow run ID to download picked-races artifact from"
         required: false
         type: string
+
+concurrency:
+  group: night-results-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   run-night-results:
@@ -46,13 +52,44 @@ jobs:
             echo "SOURCE_RUN_ID=${{ github.event.inputs.source_run_id }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Check scheduled notification marker
+        uses: actions/github-script@v7
+        id: notification-marker
+        with:
+          script: |
+            if (context.eventName !== "schedule") {
+              core.setOutput("already_sent", "false");
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const markerName = `night-results-sent-${process.env.HIDUKE}`;
+            const response = await github.rest.actions.listArtifactsForRepo({
+              owner,
+              repo,
+              name: markerName,
+              per_page: 100
+            });
+            const alreadySent = response.data.artifacts.some(
+              (artifact) => artifact && artifact.name === markerName && !artifact.expired
+            );
+
+            core.info(`${markerName}: already_sent=${alreadySent}`);
+            core.setOutput("already_sent", alreadySent ? "true" : "false");
+        env:
+          HIDUKE: ${{ env.HIDUKE }}
+
       - name: Install dependencies
+        if: steps.notification-marker.outputs.already_sent != 'true'
         run: npm install
 
       - name: Install Playwright Chromium
+        if: steps.notification-marker.outputs.already_sent != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Resolve picked race state artifact
+        if: steps.notification-marker.outputs.already_sent != 'true'
         uses: actions/github-script@v7
         id: resolve-artifact
         with:
@@ -124,11 +161,11 @@ jobs:
           SOURCE_RUN_ID: ${{ env.SOURCE_RUN_ID }}
 
       - name: Extract picked race state zip
-        if: steps.resolve-artifact.outputs.found == 'true'
+        if: steps.notification-marker.outputs.already_sent != 'true' && steps.resolve-artifact.outputs.found == 'true'
         run: unzip -o "${{ steps.resolve-artifact.outputs.zip_path }}" -d "${{ env.PICK_STATE_DIR }}"
 
       - name: Rebuild picked race state
-        if: steps.resolve-artifact.outputs.found != 'true'
+        if: steps.notification-marker.outputs.already_sent != 'true' && steps.resolve-artifact.outputs.found != 'true'
         env:
           HIDUKE: ${{ env.HIDUKE }}
           PICK_STATE_DIR: ${{ env.PICK_STATE_DIR }}
@@ -136,6 +173,7 @@ jobs:
         run: npm start
 
       - name: Run result notifier
+        if: steps.notification-marker.outputs.already_sent != 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           HIDUKE: ${{ env.HIDUKE }}
@@ -144,8 +182,23 @@ jobs:
           RESULT_CONCURRENCY: ${{ env.RESULT_CONCURRENCY }}
         run: npm run start:night
 
+      - name: Create notification marker
+        if: steps.notification-marker.outputs.already_sent != 'true'
+        run: |
+          mkdir -p "${{ env.PICK_STATE_DIR }}"
+          echo "sent_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${{ env.PICK_STATE_DIR }}/night-results-sent-${{ env.HIDUKE }}.txt"
+
+      - name: Upload notification marker
+        if: steps.notification-marker.outputs.already_sent != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: night-results-sent-${{ env.HIDUKE }}
+          path: ${{ env.PICK_STATE_DIR }}/night-results-sent-${{ env.HIDUKE }}.txt
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Upload night debug artifacts
-        if: always()
+        if: always() && steps.notification-marker.outputs.already_sent != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: night-debug-${{ env.HIDUKE }}
