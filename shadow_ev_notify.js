@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { getPlaceName } from "./lib/places.js";
+
 async function deliverDiscordPayloads({ webhookUrl, payloads, dryRun }) {
   for (const payload of payloads) {
     if (dryRun) {
@@ -28,6 +30,11 @@ function formatPercent(value) {
   return Number.isFinite(value) ? `${value.toFixed(1)}%` : "—";
 }
 
+function formatOdds(value) {
+  const odds = Number(value);
+  return Number.isFinite(odds) ? `${odds.toFixed(1)}倍` : "—";
+}
+
 function formatDate(hiduke) {
   return /^\d{8}$/.test(hiduke || "")
     ? `${hiduke.slice(0, 4)}-${hiduke.slice(4, 6)}-${hiduke.slice(6, 8)}`
@@ -53,6 +60,27 @@ function findChampionRule(report, protocol) {
 
 function delta(current, previous, key) {
   return Number(current?.[key] || 0) - Number(previous?.[key] || 0);
+}
+
+function hitIdentity(hit) {
+  return `${hit?.key || ""}:${hit?.winner || ""}`;
+}
+
+function periodHitDetails(current, previous, periodHits) {
+  const currentHits = Array.isArray(current?.hit_details) ? current.hit_details : [];
+  if (periodHits <= 0 || !currentHits.length) return [];
+  const previousHits = Array.isArray(previous?.hit_details) ? previous.hit_details : [];
+  if (!previousHits.length) return currentHits.slice(-periodHits);
+  const previousIds = new Set(previousHits.map(hitIdentity));
+  return currentHits.filter((hit) => !previousIds.has(hitIdentity(hit)));
+}
+
+function formatHitDetail(hit) {
+  const match = /^(\d{4})(\d{2})(\d{2})-(\d{2})-(\d{2})$/.exec(hit?.key || "");
+  const date = match ? `${Number(match[2])}/${Number(match[3])}` : "日付不明";
+  const place = match ? getPlaceName(Number(match[4])) : "場不明";
+  const race = match ? `${Number(match[5])}R` : "R不明";
+  return `🎯 ${date} ${place}${race}｜的中目 **${hit?.winner || "—"}**｜締切前 ${formatOdds(hit?.pre_odds)}｜払戻 ${formatYen(hit?.payout)}`;
 }
 
 async function main() {
@@ -117,6 +145,14 @@ async function main() {
   const periodStake = delta(current, previous, "stake");
   const periodReturn = delta(current, previous, "return");
   const periodRoi = periodStake > 0 ? (periodReturn / periodStake) * 100 : null;
+  const newHits = periodHitDetails(current, previous, periodHits);
+  const displayedHits = newHits.slice(0, 8);
+  const hitDetailLines = displayedHits.length
+    ? displayedHits.map(formatHitDetail)
+    : ["的中なし"];
+  if (newHits.length > displayedHits.length) {
+    hitDetailLines.push(`ほか ${newHits.length - displayedHits.length}件`);
+  }
   const interval = current.bootstrap_95 || [null, null];
   const checkpoint = current.tickets >= 20000 ? "20,000点チェック" : current.tickets >= 10000 ? "10,000点チェック" : "検証継続中";
   const payload = {
@@ -131,6 +167,9 @@ async function main() {
           `**前回通知以降**`,
           `買い目 ${periodTickets.toLocaleString("ja-JP")}点｜的中 ${periodHits}件`,
           `投資 ${formatYen(periodStake)}｜払戻 ${formatYen(periodReturn)}｜ROI ${formatPercent(periodRoi)}`,
+          "",
+          `**今回の的中明細**`,
+          ...hitDetailLines,
           "",
           `**2026-08-25からの累計**`,
           `買い目 ${current.tickets.toLocaleString("ja-JP")}点｜的中 ${current.hits}件`,
