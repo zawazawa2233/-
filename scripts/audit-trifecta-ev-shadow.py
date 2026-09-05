@@ -71,6 +71,8 @@ def main():
         env,
         repo,
     )
+    run([sys.executable, "scripts/compare-shadow-variants.py", "--snapshot-dir",
+         str(args.snapshot_dir), "--report", str(output)], env, repo)
     report = json.loads(output.read_text(encoding="utf-8"))
     rule = next(
         item
