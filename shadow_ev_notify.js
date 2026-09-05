@@ -183,6 +183,18 @@ async function main() {
       }
     ]
   };
+  if (report.comparison) {
+    payload.embeds.push({
+      title: "改善案の並行検証｜9/6開始",
+      description: [
+        "各レース1点・100円換算／同じ期間で比較",
+        ...report.comparison.forward.map((v) =>
+          `${v.label}：${v.tickets}点・${v.hits}的中｜回収率 ${formatPercent(v.roi)}｜最大連敗 ${v.max_losing_streak}`),
+        "初回比較は10/6以降。過去分は参考集計。全買い目明細はActionsの検証レポートに保存。"
+      ].join("\n"),
+      color: 0x3498db
+    });
+  }
   await deliverDiscordPayloads({ webhookUrl, payloads: [payload], dryRun });
   if (!dryRun) {
     await mkdir(path.dirname(stateFile), { recursive: true });
