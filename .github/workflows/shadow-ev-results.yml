@@ -37,15 +37,16 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
+          package-manager-cache: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -72,7 +73,7 @@ jobs:
 
       - name: Restore shadow cache
         if: env.SHADOW_ACTIVE == 'true' && inputs.test_notification != true
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .shadow-cache
           key: ${{ runner.os }}-shadow-v1-${{ env.THROUGH }}
@@ -129,7 +130,7 @@ jobs:
 
       - name: Upload shadow audit
         if: always() && env.SHADOW_ACTIVE == 'true' && env.SHADOW_ALREADY_NOTIFIED != 'true' && inputs.test_notification != true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shadow-ev-audit-${{ env.THROUGH }}
           path: artifacts/trifecta-ev-shadow-audit-${{ env.THROUGH }}.json

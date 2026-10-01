@@ -49,15 +49,16 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
+          package-manager-cache: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -77,7 +78,7 @@ jobs:
 
       - name: Restore one-pick notification state
         if: env.SHADOW_ACTIVE == 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .shadow-one-pick-cache
           key: ${{ runner.os }}-one-pick-${{ env.HIDUKE }}-${{ github.run_id }}
@@ -128,14 +129,14 @@ jobs:
 
       - name: Save one-pick notification state
         if: always() && env.SHADOW_ACTIVE == 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .shadow-one-pick-cache
           key: ${{ runner.os }}-one-pick-${{ env.HIDUKE }}-${{ github.run_id }}
 
       - name: Upload manual scoring report
         if: github.event_name == 'workflow_dispatch' && env.SHADOW_ACTIVE == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: trifecta-one-pick-${{ env.HIDUKE }}-${{ github.run_id }}
           path: artifacts/trifecta-one-pick-${{ env.HIDUKE }}.json

@@ -29,12 +29,13 @@ jobs:
       RESULT_CONCURRENCY: "6"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
+          package-manager-cache: false
 
       - name: Resolve HIDUKE
         run: |
@@ -53,7 +54,7 @@ jobs:
           fi
 
       - name: Check scheduled notification marker
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         id: notification-marker
         with:
           script: |
@@ -90,7 +91,7 @@ jobs:
 
       - name: Resolve picked race state artifact
         if: steps.notification-marker.outputs.already_sent != 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         id: resolve-artifact
         with:
           script: |
@@ -190,7 +191,7 @@ jobs:
 
       - name: Upload notification marker
         if: steps.notification-marker.outputs.already_sent != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: night-results-sent-${{ env.HIDUKE }}
           path: ${{ env.PICK_STATE_DIR }}/night-results-sent-${{ env.HIDUKE }}.txt
@@ -199,7 +200,7 @@ jobs:
 
       - name: Upload night debug artifacts
         if: always() && steps.notification-marker.outputs.already_sent != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: night-debug-${{ env.HIDUKE }}
           path: ${{ env.RESULT_DEBUG_DIR }}

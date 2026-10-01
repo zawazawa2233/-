@@ -17,12 +17,13 @@ jobs:
       PICK_STATE_DIR: artifacts
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
+          package-manager-cache: false
 
       - name: Resolve HIDUKE
         run: |
@@ -46,7 +47,7 @@ jobs:
         run: npm start
 
       - name: Upload picked race state
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: picked-races-${{ env.HIDUKE }}
           path: ${{ env.PICK_STATE_DIR }}/picked-races-${{ env.HIDUKE }}.json
