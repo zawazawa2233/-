@@ -10,9 +10,26 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
+
+
+class NoExhibitionData(ValueError):
+    """No race has all the exhibition inputs required for OnePick scoring."""
+
+
+class OnePickArrayBuilder:
+    """Adapt the shared array entry point without changing frozen EV files."""
+
+    def __init__(self, core):
+        self.core = core
+
+    def make_arrays(self, races, mean=None, scale=None):
+        if not races:
+            raise NoExhibitionData("No races have complete exhibition data")
+        return self.core.make_arrays(races, mean, scale)
 
 
 def load_module(name, path):
@@ -135,8 +152,10 @@ def load_official_program(core, archive_dir, hiduke):
             core.read_archive(archive, f"B{short}.TXT"), hiduke
         )
     except Exception as error:
-        print(f"[program-fallback] {error}")
-        return []
+        detail = str(error)
+        if isinstance(error, subprocess.CalledProcessError) and error.stderr:
+            detail += ": " + error.stderr.decode(errors="replace").strip()
+        raise RuntimeError(f"[program-fallback] Cannot read {archive}: {detail}") from error
     races = []
     for race in programs.values():
         if len(race["boats"]) != 6:
@@ -194,9 +213,22 @@ def main():
     mean = np.asarray(frozen["base_numeric_mean"], dtype=np.float64)
     scale = np.asarray(frozen["base_numeric_scale"], dtype=np.float64)
     betas = [np.asarray(beta, dtype=np.float64) for beta in frozen["betas"]]
-    races, features, _, _, _ = exhibition.enriched_arrays(
-        core, helper, raw_races, args.snapshot_dir, mean, scale
-    )
+    try:
+        races, features, _, _, _ = exhibition.enriched_arrays(
+            OnePickArrayBuilder(core), helper, raw_races, args.snapshot_dir, mean, scale
+        )
+    except NoExhibitionData:
+        report = empty_report(
+            args.hiduke,
+            protocol["protocol_id"],
+            "Race cards are available, but exhibition data are not ready yet.",
+            race_card_source,
+        )
+        report["counts"]["race_cards"] = len(raw_races)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False))
+        return
     odds_rows = helper.load_prerace_odds(args.snapshot_dir / "od3")
     s_minimum = protocol["race_grade"]["s_minimum"]
     a_minimum = protocol["race_grade"]["a_minimum"]
