@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   run-night-results:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       PICK_STATE_DIR: artifacts
       RESULT_DEBUG_DIR: artifacts/night-debug
